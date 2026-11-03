@@ -1,0 +1,20 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.coverage
+
+# 수집 데이터, 전용 Chrome 프로필, browser-harness 상태, 로그 (각자 실행하면 다시 생깁니다)
+.data/
+*.log
+
+# 개인 설정 (.env.example만 공유)
+.env
+
+# 에디터·OS·로컬 도구 설정
+.DS_Store
+.idea/
+.vscode/
+.claude/
