@@ -1,5 +1,9 @@
 """Parsers against trimmed-down payloads shaped like each site's real responses."""
-from jdc.scrapers import jobkorea, jobplanet, jumpit, remember, wanted
+from datetime import date
+
+from jdc.scrapers import jobkorea, jobplanet, jumpit, remember, saramin, wanted
+
+TODAY = date(2026, 11, 3)
 
 
 def test_wanted_list_item():
@@ -108,3 +112,38 @@ def test_jobkorea_check():
     assert jobkorea.parse_check({"status": 200, "validThrough": "2020-01-01T23:59"}).state == "closed"
     assert jobkorea.parse_check({"status": 200, "validThrough": "2099-01-01T23:59"}).state == "open"
     assert jobkorea.parse_check({"status": 0}).state == "unknown"
+
+
+def test_saramin_row():
+    p = saramin.parse_row({
+        "id": "55331513", "title": "현장 사업관리(PM)", "company": "(주)혁산정보시스템",
+        "sectors": ["솔루션", "PM(프로젝트매니저)", "솔루션"], "place": "서울 영등포구 외",
+        "career": "3 ~ 15년 · 계약직", "deadline": "~11.22(일)", "posted": "173일 전 등록",
+    }, TODAY)
+    assert p.url == "https://www.saramin.co.kr/zf_user/jobs/relay/view?rec_idx=55331513"
+    assert (p.career_min, p.career_max, p.career_text) == (3, 15, "3 ~ 15년")
+    assert p.employment_type == "계약직" and p.locations == ["서울 영등포구"]
+    assert p.skills == ["솔루션", "PM(프로젝트매니저)"]
+    assert (p.deadline, p.posted_at) == ("2026-11-22", "2026-05-14")
+
+
+def test_saramin_row_variants():
+    p = saramin.parse_row({"id": "1", "title": "t", "company": "c", "career": "신입 · 경력 · 정규직 외",
+                           "deadline": "D-7", "posted": "2분 전 수정"}, TODAY)
+    assert (p.career_min, p.career_max) == (0, None) and p.employment_type == "정규직 외"
+    assert p.deadline == "2026-11-10" and p.posted_at is None  # an edit time is not a posting date
+    assert saramin.parse_row({"id": "3", "title": "AI &amp; IT 전문가", "company": "c"}, TODAY).title == "AI & IT 전문가"
+    p = saramin.parse_row({"id": "2", "title": "t", "company": "c", "career": "경력무관 · 교육생",
+                           "deadline": "상시채용", "posted": "3시간 전 등록"}, TODAY)
+    assert (p.career_min, p.career_max, p.deadline, p.posted_at) == (0, None, None, "2026-11-03")
+
+
+def test_saramin_check():
+    assert saramin.parse_check({"status": 200, "closed": True, "found": True}, TODAY).state == "closed"
+    assert saramin.parse_check({"status": 200, "closed": False, "found": False}, TODAY).state == "missing"
+    expired = saramin.parse_check({"status": 200, "found": True, "period": "시작일 2026.10.01 00:00 마감일 2026.11.02 23:59"}, TODAY)
+    assert (expired.state, expired.reason) == ("closed", "deadline")
+    open_ = saramin.parse_check({"status": 200, "found": True, "period": "시작일 2026.05.14 00:00 마감일 2026.11.13 23:59"}, TODAY)
+    assert (open_.state, open_.fields) == ("open", {"deadline": "2026-11-13"})
+    assert saramin.parse_check({"status": 200, "found": True, "period": "시작일 2026.10.01 00:00 마감일 채용시"}, TODAY).state == "open"
+    assert saramin.parse_check({"status": 0}, TODAY).reason == "http:0"

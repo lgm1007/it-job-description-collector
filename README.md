@@ -1,6 +1,6 @@
 # dev-jobs — 개발자 채용공고 모아보기
 
-원티드 · 리멤버 · 잡플래닛 · 점핏 · 잡코리아의 개발 직군 채용공고를
+원티드 · 리멤버 · 잡플래닛 · 점핏 · 사람인 · 잡코리아의 개발 직군 채용공고를
 [browser-harness](https://github.com/browser-use/browser-harness)로 매일 수집해서,
 키워드 · 지역 · 경력 같은 조건으로 한 번에 찾는 로컬 웹 서비스입니다.
 마감된 공고는 매일 수집하면서 걸러내고 화면에 보여주지 않습니다.
@@ -44,7 +44,7 @@ jdc scrape  또는  매일 06:00 (jdc serve 안의 스케줄러)
   직접 띄운 경우에는 수집이 끝나면 종료합니다.
 - **페이지 안에서 사이트 자체 API를 부릅니다.** 각 사이트의 프론트엔드가 쓰는 요청을 실제 브라우저에서,
   그 사이트 출처(쿠키·CORS 포함)로 보내므로 마감일·상태 같은 값을 구조화된 형태로 정확하게 받습니다.
-  화면 HTML만 주는 잡코리아는 페이지 안에서 `DOMParser`로 필요한 값만 뽑습니다.
+  화면 HTML만 주는 사람인·잡코리아는 페이지 안에서 `DOMParser`로 필요한 값만 뽑습니다.
 
 ### 사이트별 수집 범위
 
@@ -54,6 +54,7 @@ jdc scrape  또는  매일 06:00 (jdc serve 안의 스케줄러)
 | 리멤버 | SW개발 + AI·데이터 | `job_postings/search` 50건씩, 본문 포함 | 필요 없음 | `published`/`closed`, 404 |
 | 잡플래닛 | 개발 + 데이터 | `/api/v3/job/postings` 100건씩 | `/api/v1/job/postings/{id}` | `open` 여부, 빈 응답 |
 | 점핏 | 전체 (개발자 전용) | `/api/positions` 100건씩 | `/api/position/{id}` | 숨김 여부, 없는 공고 |
+| 사람인 | IT개발·데이터 | 직무별 목록 HTML 100건씩 | 없음 (본문 대부분이 이미지) | `view-ajax`의 '마감되었습니다'·마감일 |
 | 잡코리아 | AI·개발·데이터 | `_GI_List` HTML 100건씩 | 없음 (본문 대부분이 이미지) | 404, JSON-LD `validThrough` |
 
 ### 마감된 공고를 숨기는 규칙
@@ -117,7 +118,7 @@ crontab -e
 | `JDC_HOST` / `JDC_PORT` | `127.0.0.1` / `8000` | 웹 서버 주소 |
 | `JDC_SCRAPE_TIME` | `06:00` | 매일 수집 시각 (한국 시간) |
 | `JDC_SCRAPE_ON_START` | `1` | 서버 시작 시 수집이 오래됐으면 바로 수집 |
-| `JDC_SOURCES` | 다섯 곳 모두 | `wanted,remember,jobplanet,jumpit,jobkorea` 중 일부 |
+| `JDC_SOURCES` | 여섯 곳 모두 | `wanted,remember,jobplanet,jumpit,saramin,jobkorea` 중 일부 |
 | `JDC_CHROME_PATH` | 자동 탐색 | Chrome 실행 파일 경로 |
 | `JDC_CDP_PORT` | `9333` | 전용 Chrome의 원격 디버깅 포트 |
 | `JDC_HEADLESS` | `1` | `0`이면 Chrome 창을 띄워 수집 과정을 볼 수 있습니다 |

@@ -29,7 +29,11 @@ _REGION_ALIASES = {
     "제주도": "제주", "제주특별자치도": "제주",
 }
 _REMOTE_WORDS = ("재택", "원격", "리모트", "remote")
-_ABROAD_WORDS = ("해외", "미국", "일본", "중국", "베트남", "싱가포르", "유럽", "캐나다", "호주")
+_ABROAD_WORDS = (
+    "해외", "아시아", "중동", "북미", "중미", "남미", "유럽", "아프리카", "오세아니아", "멕시코",
+    "미국", "일본", "중국", "대만", "홍콩", "베트남", "싱가포르", "인도", "말레이시아", "태국", "필리핀",
+    "캐나다", "호주", "독일", "영국", "프랑스",
+)
 # Addresses that skip the 시/도: only names that exist in a single region are listed.
 _SEOUL_GU = (
     "강남구 강동구 강북구 관악구 광진구 구로구 금천구 노원구 도봉구 동대문구 동작구 마포구 서대문구 서초구 "
@@ -54,11 +58,16 @@ def today_kst() -> str:
     return now_kst().date().isoformat()
 
 
-def _region_of(token: str) -> str | None:
+def _region_of(token: str, nxt: str) -> str | None:
     if token in REGIONS:
         return token
     if token in _REGION_ALIASES:
         return _REGION_ALIASES[token]
+    # 전남광주(통합특별시): its 구 are the former 광주, its 시·군 the former 전남.
+    if token.startswith("전남광주"):
+        return "광주" if nxt.endswith("구") else "전남"
+    if token.endswith("전체") and len(token) > 2:  # '서울전체'
+        return _region_of(token[:-2], nxt)
     # Truncated forms such as '서울특별' or '부산광역'
     if token[:2] in REGIONS and token[2:4] in ("특별", "광역"):
         return token[:2]
@@ -73,8 +82,8 @@ def normalize_location(raw: str) -> tuple[str | None, str | None]:
     tokens = [t.strip("():[]·") for t in re.split(r"[\s/,]+", text)]
     tokens = [t for t in tokens if t]
     for i, token in enumerate(tokens):
-        if region := _region_of(token):
-            nxt = tokens[i + 1] if i + 1 < len(tokens) else ""
+        nxt = tokens[i + 1] if i + 1 < len(tokens) else ""
+        if region := _region_of(token, nxt):
             district = f"{region} {nxt}" if re.fullmatch(r"[가-힣]+(구|시|군)", nxt) else None
             return region, district
     for token in tokens[:3]:
@@ -99,9 +108,11 @@ def career_from_text(text: str | None) -> tuple[int | None, int | None]:
     if not text:
         return None, None
     t = re.sub(r"\s+", "", text)
+    newcomer = "신입" in t or "인턴" in t
+    if re.search(r"(년수|연차|년차)무관", t):  # 경력(년수무관): experienced, any number of years
+        return (0 if newcomer else 1), None
     if "무관" in t:
         return 0, None
-    newcomer = "신입" in t or "인턴" in t
     if m := re.search(r"(\d+)\s*[~∼-]\s*(\d+)년", t):
         lo, hi = int(m.group(1)), int(m.group(2))
         return (0 if newcomer else lo), hi
@@ -163,6 +174,24 @@ def month_day_to_date(month: int, day: int, today: date | None = None) -> str:
     if candidate < today - timedelta(days=31):
         candidate = date(today.year + 1, month, day)
     return candidate.isoformat()
+
+
+def deadline_from_text(text: str | None, today: date | None = None) -> str | None:
+    """'~01/02(토)', '~11.13(금)', 'D-7', '오늘마감', '내일마감' -> date; 상시채용·채용시 -> None."""
+    today = today or now_kst().date()
+    t = (text or "").replace(" ", "")
+    if "오늘마감" in t:
+        return today.isoformat()
+    if "내일마감" in t:
+        return (today + timedelta(days=1)).isoformat()
+    if m := re.search(r"D-(\d+)", t):
+        return (today + timedelta(days=int(m.group(1)))).isoformat()
+    if m := re.search(r"~(\d{1,2})[./](\d{1,2})", t):
+        return month_day_to_date(int(m.group(1)), int(m.group(2)), today)
+    return None
+
+
+EMPLOYMENT = re.compile(r"정규직|계약직|인턴|프리랜서|파견직|병역특례|위촉직|아르바이트|교육생|전환형")
 
 
 _COMPANY_NOISE = re.compile(

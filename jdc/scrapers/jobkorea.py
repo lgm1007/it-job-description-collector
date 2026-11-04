@@ -8,10 +8,17 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterator
-from datetime import timedelta
 
 from ..models import Detail, Posting
-from ..normalize import career_from_text, month_day_to_date, normalize_location, now_kst, to_date, unique
+from ..normalize import (
+    EMPLOYMENT,
+    career_from_text,
+    deadline_from_text,
+    normalize_location,
+    now_kst,
+    to_date,
+    unique,
+)
 from .base import ScrapeError, Scraper
 
 PAGE_SIZE = 100
@@ -76,32 +83,18 @@ async (gnos, concurrency) => {
 }
 """
 
-_EMPLOYMENT = re.compile(r"정규직|계약직|인턴|프리랜서|파견직|병역특례|위촉직|아르바이트|교육생|전환형")
-
-
-def _deadline_from_side(side: str) -> str | None:
-    today = now_kst().date()
-    if "오늘마감" in side.replace(" ", ""):
-        return today.isoformat()
-    if "내일마감" in side.replace(" ", ""):
-        return (today + timedelta(days=1)).isoformat()
-    if m := re.search(r"~\s*(\d{1,2})/(\d{1,2})", side):
-        return month_day_to_date(int(m.group(1)), int(m.group(2)), today)
-    return None  # 상시채용 / 채용시
-
-
 def parse_row(row: dict) -> Posting:
     cells = row.get("cells") or []
     career_text = next((c for c in cells if re.match(r"(신입|경력|인턴)", c)), None)
     location = next((c for c in cells if normalize_location(c)[0] not in (None, "기타")), None)
-    employment = next((c for c in cells if _EMPLOYMENT.search(c)), None)
+    employment = next((c for c in cells if EMPLOYMENT.search(c)), None)
     # data-brazeinfo: 제목|gno|?|시작일|마감일|회사|회사번호 (상시채용은 2070년대 날짜)
     braze = (row.get("braze") or "").split("|")
     posted_at = to_date(braze[3]) if len(braze) > 4 else None
     if len(braze) > 4 and re.match(r"\d{4}-\d{2}-\d{2}", braze[4]):
         deadline = to_date(braze[4])
     else:
-        deadline = _deadline_from_side(row.get("side") or "")
+        deadline = deadline_from_text(row.get("side"))
     career_min, career_max = career_from_text(career_text)
     gno = str(row["gno"])
     return Posting(

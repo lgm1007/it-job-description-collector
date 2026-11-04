@@ -3,11 +3,12 @@ from .jobkorea import JobKoreaScraper
 from .jobplanet import JobPlanetScraper
 from .jumpit import JumpitScraper
 from .remember import RememberScraper
+from .saramin import SaraminScraper
 from .wanted import WantedScraper
 
 SCRAPERS: dict[str, type[Scraper]] = {
     cls.source: cls
-    for cls in (WantedScraper, RememberScraper, JobPlanetScraper, JumpitScraper, JobKoreaScraper)
+    for cls in (WantedScraper, RememberScraper, JobPlanetScraper, JumpitScraper, SaraminScraper, JobKoreaScraper)
 }
 SOURCE_LABELS = {source: cls.label for source, cls in SCRAPERS.items()}
 

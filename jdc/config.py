@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-ALL_SOURCES = ("wanted", "remember", "jobplanet", "jumpit", "jobkorea")
+ALL_SOURCES = ("wanted", "remember", "jobplanet", "jumpit", "saramin", "jobkorea")
 
 
 def load_dotenv(path: Path = PROJECT_ROOT / ".env") -> None:

@@ -71,7 +71,7 @@ CREATE TABLE IF NOT EXISTS scrape_runs (
 """
 
 # Which copy represents a posting that appears on several sites.
-SOURCE_PRIORITY = ("wanted", "remember", "jumpit", "jobplanet", "jobkorea")
+SOURCE_PRIORITY = ("wanted", "remember", "jumpit", "jobplanet", "saramin", "jobkorea")
 # Posting attributes stored as columns; detail lookups merge into the same keys.
 _RECORD_KEYS = ("url", "title", "company", "locations", "career_min", "career_max", "career_text", "skills",
                 "categories", "employment_type", "deadline", "posted_at", "description", "extra")

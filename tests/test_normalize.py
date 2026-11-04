@@ -28,6 +28,10 @@ from jdc.normalize import (
     ("성남시 분당구 판교역로 166", ("경기", "경기 성남시")),
     ("판교 테크노밸리", ("경기", "경기 성남시")),
     ("중구 퇴계로 385", ("기타", None)),  # 중구 exists in several cities
+    ("전남광주 여수시 외", ("전남", "전남 여수시")),
+    ("인천전체", ("인천", None)),
+    ("아시아·중동 말레이시아", ("해외", None)),
+    ("전남광주통합특별시 광산구 첨단과기로", ("광주", "광주 광산구")),
     ("재택근무", ("원격", None)),
     ("미국 캘리포니아", ("해외", None)),
     ("여의공원로 115", ("기타", None)),
@@ -47,6 +51,8 @@ def test_normalize_location(raw, expected):
     ("경력1~3년", (1, 3)),
     ("경력 5년 이상", (5, None)),
     ("경력", (1, None)),
+    ("경력(년수무관)", (1, None)),
+    ("신입 · 경력(연차무관)", (0, None)),
     (None, (None, None)),
 ])
 def test_career_from_text(text, expected):
@@ -89,6 +95,22 @@ def test_month_day_to_date_rolls_into_next_year():
     assert month_day_to_date(1, 2, today) == "2027-01-02"
     assert month_day_to_date(12, 3, today) == "2026-12-03"
     assert month_day_to_date(11, 1, today) == "2026-11-01"  # just passed: stays in the past
+
+
+@pytest.mark.parametrize("text, expected", [
+    ("~01/02(토)", "2027-01-02"),
+    ("즉시지원 1시간 전 등록 ~11.13(금)", "2026-11-13"),
+    ("D-7", "2026-11-10"),
+    ("오늘마감", "2026-11-03"),
+    ("내일 마감", "2026-11-04"),
+    ("상시채용", None),
+    ("채용시", None),
+    (None, None),
+])
+def test_deadline_from_text(text, expected):
+    from jdc.normalize import deadline_from_text
+
+    assert deadline_from_text(text, date(2026, 11, 3)) == expected
 
 
 def test_dedupe_key_ignores_company_suffixes_and_punctuation():
