@@ -1,4 +1,4 @@
-"""The daily run's closed-posting logic, with the browser and the site faked out."""
+"""A scrape run's closed-posting logic, with the browser and the site faked out."""
 from datetime import datetime, timedelta
 
 import pytest
@@ -74,8 +74,8 @@ def run(conn, settings, listing, **kwargs):
     return pipeline.run_source(conn, FakeBrowser(), "wanted", settings)
 
 
-def status_of(conn):
-    return {r["source_id"]: r["status"] for r in conn.execute("SELECT source_id, status FROM jobs")}
+def stored(conn):
+    return sorted(r["source_id"] for r in conn.execute("SELECT source_id FROM jobs"))
 
 
 def test_new_postings_get_details(conn, settings, fake):
@@ -84,18 +84,18 @@ def test_new_postings_get_details(conn, settings, fake):
     assert sorted(fake.asked) == ["1", "2"]
 
 
-def test_posting_missing_from_listing_is_checked_and_closed(conn, settings, fake):
+def test_posting_missing_from_listing_is_checked_and_deleted(conn, settings, fake):
     run(conn, settings, ["1", "2", "3"])
     summary = run(conn, settings, ["1", "2"], details={"3": Detail("missing", reason="not_found")})
     assert fake.asked == ["3"]
     assert summary["closed"] == 1
-    assert status_of(conn) == {"1": "open", "2": "open", "3": "closed"}
+    assert stored(conn) == ["1", "2"]
 
 
 def test_unlisted_but_still_open_on_the_site_stays(conn, settings, fake):
     run(conn, settings, ["1", "2"])
     run(conn, settings, ["1"])
-    assert status_of(conn) == {"1": "open", "2": "open"}
+    assert stored(conn) == ["1", "2"]
 
 
 def test_incomplete_listing_closes_nothing(conn, settings, fake):
@@ -103,28 +103,28 @@ def test_incomplete_listing_closes_nothing(conn, settings, fake):
     summary = run(conn, settings, ["1"], complete=False, details={"2": Detail("missing"), "3": Detail("missing")})
     assert summary["status"] == "partial"
     assert fake.asked == []
-    assert set(status_of(conn).values()) == {"open"}
+    assert stored(conn) == ["1", "2", "3"]
 
 
-def test_inconclusive_checks_close_after_threshold(conn, settings, fake):
+def test_inconclusive_checks_delete_after_threshold(conn, settings, fake):
     run(conn, settings, ["1", "2"])
-    for expected in ("open", "open", "closed"):
+    for expected in (["1", "2"], ["1", "2"], ["1"]):
         run(conn, settings, ["1"], details={"2": Detail("unknown")})
-        assert status_of(conn)["2"] == expected
+        assert stored(conn) == expected
 
 
-def test_blocked_checks_never_close(conn, settings, fake):
+def test_blocked_checks_never_delete(conn, settings, fake):
     run(conn, settings, ["1", "2"])
     for _ in range(5):
         run(conn, settings, ["1"], details={"2": Detail("unknown", reason=pipeline.NO_RESPONSE)})
-    assert status_of(conn)["2"] == "open"
+    assert stored(conn) == ["1", "2"]
 
 
 def test_listing_that_suddenly_shrinks_skips_the_sweep(conn, settings, fake):
     run(conn, settings, [str(i) for i in range(60)])
     summary = run(conn, settings, [str(i) for i in range(10)], details={str(i): Detail("missing") for i in range(60)})
     assert summary["status"] == "partial"
-    assert list(status_of(conn).values()).count("open") == 60
+    assert len(stored(conn)) == 60
 
 
 def test_scraper_error_is_recorded(conn, settings, fake):

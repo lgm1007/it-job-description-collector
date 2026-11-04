@@ -71,7 +71,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/api/jobs/{job_id}")
     def job_detail(job_id: int):
         with connection() as conn:
-            job = db.get_job(conn, job_id, today_kst())
+            job = db.get_job(conn, job_id)
         if job is None:
             raise HTTPException(status_code=404, detail="공고를 찾을 수 없습니다")
         return job

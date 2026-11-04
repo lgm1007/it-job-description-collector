@@ -11,10 +11,10 @@ from .normalize import today_kst
 
 
 def _print_summaries(summaries: list[dict]) -> None:
-    print(f"\n{'사이트':<10}{'상태':<9}{'목록':>7}{'신규':>7}{'재오픈':>7}{'마감':>7}{'상세':>7}{'재확인':>7}")
+    print(f"\n{'사이트':<10}{'상태':<9}{'목록':>7}{'신규':>7}{'마감 삭제':>9}{'상세':>7}{'재확인':>7}")
     for s in summaries:
         print(f"{s['source']:<10}{s['status']:<9}{s.get('listed', 0):>7}{s.get('new', 0):>7}"
-              f"{s.get('reopened', 0):>7}{s.get('closed', 0):>7}{s.get('details', 0):>7}{s.get('verified', 0):>7}")
+              f"{s.get('closed', 0):>9}{s.get('details', 0):>7}{s.get('verified', 0):>7}")
         if s.get("error"):
             print(f"  ! {s['error']}")
 
@@ -23,17 +23,17 @@ def _stats(settings) -> None:
     conn = db.connect(settings.db_path)
     today = today_kst()
     rows = conn.execute(
-        f"SELECT source, SUM({db.VISIBLE}) AS visible, SUM(status = 'closed') AS closed, COUNT(*) AS total "
-        "FROM jobs GROUP BY source ORDER BY source",
+        f"SELECT source, SUM({db.VISIBLE}) AS visible, COUNT(*) AS total FROM jobs GROUP BY source ORDER BY source",
         {"today": today},
     ).fetchall()
-    print(f"{'사이트':<10}{'노출 중':>8}{'마감':>8}{'전체':>8}")
+    # 'stored' also counts postings whose deadline passed since the last scrape; the next one deletes them.
+    print(f"{'사이트':<10}{'노출 중':>8}{'저장':>8}")
     for r in rows:
-        print(f"{r['source']:<10}{r['visible'] or 0:>8}{r['closed'] or 0:>8}{r['total']:>8}")
+        print(f"{r['source']:<10}{r['visible'] or 0:>8}{r['total']:>8}")
     print("\n최근 수집:")
     for run in db.latest_runs(conn):
         print(f"  {run['source']:<10} {run['status']:<8} {run['started_at']}  목록 {run['listed']}  "
-              f"신규 {run['new']}  마감 {run['closed']}" + (f"  ! {run['error']}" if run["error"] else ""))
+              f"신규 {run['new']}  마감 삭제 {run['closed']}" + (f"  ! {run['error']}" if run["error"] else ""))
     conn.close()
 
 

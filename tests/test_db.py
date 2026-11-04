@@ -12,6 +12,10 @@ def search(conn, **kwargs):
     return db.search(conn, db.SearchFilter(**kwargs), TODAY)
 
 
+def stored(conn):
+    return sorted(r[0] for r in conn.execute("SELECT source_id FROM jobs"))
+
+
 def test_new_posting_is_searchable(conn):
     assert db.upsert_listing(conn, make_posting("1"), NOW, TODAY) == "new"
     result = search(conn)
@@ -21,31 +25,32 @@ def test_new_posting_is_searchable(conn):
     assert item["skills"] == ["Kotlin", "Spring"]
 
 
-def test_closed_and_expired_postings_are_hidden(conn):
-    db.upsert_listing(conn, make_posting("open"), NOW, TODAY)
-    db.upsert_listing(conn, make_posting("closed", is_open=False), NOW, TODAY)
-    db.upsert_listing(conn, make_posting("expired", deadline="2026-11-02"), NOW, TODAY)
+def test_closed_and_expired_postings_are_not_stored(conn):
+    assert db.upsert_listing(conn, make_posting("open"), NOW, TODAY) == "new"
+    assert db.upsert_listing(conn, make_posting("closed", is_open=False), NOW, TODAY) == "skipped"
+    assert db.upsert_listing(conn, make_posting("expired", deadline="2026-11-02"), NOW, TODAY) == "skipped"
     db.upsert_listing(conn, make_posting("today", deadline=TODAY), NOW, TODAY)
+    assert stored(conn) == ["open", "today"]
     assert sorted(ids(search(conn))) == ["open", "today"]
-    # The deadline also hides postings between scrapes, before close_expired runs.
+    # Between scrapes the deadline already hides it; the next scrape deletes it.
     assert ids(db.search(conn, db.SearchFilter(), "2026-11-04")) == ["open"]
-    assert db.close_expired(conn, "2026-11-04", NOW) == 1
-    row = conn.execute("SELECT status, closed_reason FROM jobs WHERE source_id = 'today'").fetchone()
-    assert tuple(row) == ("closed", "deadline")
+    assert db.delete_expired(conn, "2026-11-04") == 1
+    assert stored(conn) == ["open"]
 
 
-def test_listing_again_reopens_and_extended_deadline_counts(conn):
-    db.upsert_listing(conn, make_posting("1", deadline="2026-11-02"), NOW, "2026-11-01")
-    db.close_expired(conn, TODAY, NOW)
-    assert search(conn)["total"] == 0
-    assert db.upsert_listing(conn, make_posting("1", deadline="2026-11-30"), NOW, TODAY) == "reopened"
-    assert search(conn)["total"] == 1
-
-
-def test_still_listed_after_deadline_stays_closed(conn):
+def test_listing_that_marks_a_posting_closed_deletes_it(conn):
     db.upsert_listing(conn, make_posting("1", deadline="2026-11-30"), NOW, TODAY)
+    db.upsert_listing(conn, make_posting("2"), NOW, TODAY)
     assert db.upsert_listing(conn, make_posting("1", deadline="2026-11-02"), NOW, TODAY) == "closed"
-    assert conn.execute("SELECT closed_reason FROM jobs").fetchone()[0] == "deadline"
+    assert db.upsert_listing(conn, make_posting("2", is_open=False), NOW, TODAY) == "closed"
+    assert stored(conn) == []
+
+
+def test_deleted_posting_listed_again_comes_back_as_new(conn):
+    db.upsert_listing(conn, make_posting("1", deadline="2026-11-02"), NOW, "2026-11-01")
+    db.delete_expired(conn, TODAY)
+    assert db.upsert_listing(conn, make_posting("1", deadline="2026-11-30"), NOW, TODAY) == "new"
+    assert search(conn)["total"] == 1
 
 
 def test_detail_merges_without_being_overwritten_by_listing(conn):
@@ -56,7 +61,7 @@ def test_detail_merges_without_being_overwritten_by_listing(conn):
     }), NOW)
     # The next listing pass carries less information than the detail page did.
     db.upsert_listing(conn, make_posting("1", locations=["서울"], skills=[], posted_at=None), NOW, TODAY)
-    job = db.get_job(conn, 1, TODAY)
+    job = db.get_job(conn, 1)
     assert job["description"].endswith("Kafka 운영 경험")
     assert job["posted_at"] == "2026-10-30"
     assert job["location"] == "서울 송파구"
@@ -67,15 +72,17 @@ def test_detail_merges_without_being_overwritten_by_listing(conn):
 def test_unparseable_detail_address_does_not_replace_region(conn):
     db.upsert_listing(conn, make_posting("1", locations=["서울"]), NOW, TODAY)
     db.apply_detail(conn, "wanted", "1", Detail("open", {"locations": ["본사 3층 (엘리베이터 옆)"]}), NOW)
-    assert db.get_job(conn, 1, TODAY)["location"] == "서울"
+    assert db.get_job(conn, 1)["location"] == "서울"
 
 
-def test_detail_closed_or_missing_hides(conn):
+def test_detail_closed_or_missing_deletes(conn):
     db.upsert_listing(conn, make_posting("1"), NOW, TODAY)
     db.upsert_listing(conn, make_posting("2"), NOW, TODAY)
+    db.upsert_listing(conn, make_posting("3"), NOW, TODAY)
     assert db.apply_detail(conn, "wanted", "1", Detail("closed", reason="status:close"), NOW) == "closed"
     assert db.apply_detail(conn, "wanted", "2", Detail("missing", reason="not_found"), NOW) == "closed"
-    assert search(conn)["total"] == 0
+    assert db.apply_detail(conn, "wanted", "3", Detail("unknown"), NOW) == "unknown"
+    assert stored(conn) == ["3"]
 
 
 def test_keyword_filters(conn):
@@ -154,8 +161,8 @@ def test_unlisted_bookkeeping(conn):
     db.upsert_listing(conn, make_posting("1"), "2026-11-01T06:00:00+09:00", TODAY)
     db.upsert_listing(conn, make_posting("2"), NOW, TODAY)
     assert db.open_ids_not_seen(conn, "wanted", "2026-11-03T00:00:00+09:00", 10) == ["1"]
-    assert db.bump_missing(conn, "wanted", "1", 2, NOW) is False
-    assert db.bump_missing(conn, "wanted", "1", 2, NOW) is True
+    assert db.bump_missing(conn, "wanted", "1", 2) is False
+    assert db.bump_missing(conn, "wanted", "1", 2) is True
     assert ids(search(conn)) == ["2"]
 
 
@@ -167,3 +174,19 @@ def test_facets(conn):
     assert f["total"] == 2 and f["sources"] == {"wanted": 1, "jumpit": 1}
     assert {r["name"] for r in f["regions"]} == {"서울", "경기"}
     assert f["districts"]["경기"] == [{"name": "경기 성남시", "count": 1}]
+
+
+def test_closed_rows_from_older_databases_are_purged(tmp_path):
+    path = tmp_path / "old.sqlite3"
+    legacy = db.sqlite3.connect(path)
+    legacy.execute(
+        "CREATE TABLE jobs (id INTEGER PRIMARY KEY, source TEXT, source_id TEXT, deadline TEXT, "
+        "last_seen_at TEXT, dedupe_key TEXT, status TEXT NOT NULL DEFAULT 'open')"
+    )
+    legacy.executemany("INSERT INTO jobs (source, source_id, status) VALUES ('wanted', ?, ?)",
+                       [("1", "open"), ("2", "closed")])
+    legacy.commit()
+    legacy.close()
+    conn = db.connect(path)
+    assert [r[0] for r in conn.execute("SELECT source_id FROM jobs")] == ["1"]
+    conn.close()

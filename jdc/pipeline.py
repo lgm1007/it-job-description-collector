@@ -1,10 +1,10 @@
-"""One scrape run: read every site's listing, enrich new postings, retire closed ones.
+"""One scrape run: read every site's listing, enrich new postings, delete closed ones.
 
-Closed postings are detected three ways, from cheapest to most expensive:
-  1. the listing itself says so, or the deadline has passed (also enforced at query time);
+Closed postings are detected three ways, from cheapest to most expensive, and deleted:
+  1. the listing itself says so, or the deadline has passed (also hidden at query time);
   2. a posting that a *complete* listing no longer contains is looked up on its detail
-     page; 'closed' or 'not found' closes it right away;
-  3. if that lookup stays inconclusive for several runs, the posting is closed anyway.
+     page; 'closed' or 'not found' deletes it right away;
+  3. if that lookup stays inconclusive for several runs, the posting is deleted anyway.
 A listing that failed half-way never triggers 2 or 3, so a site hiccup can't wipe postings.
 """
 from __future__ import annotations
@@ -96,9 +96,9 @@ def run_scrape(settings: Settings, sources: Iterable[str] | None = None, *, deta
             with Browser(settings) as browser:
                 for source in sources:
                     summaries.append(run_source(conn, browser, source, settings, details=details))
-            expired = db.close_expired(conn, today_kst(), now_kst().isoformat())
+            expired = db.delete_expired(conn, today_kst())
             conn.commit()
-            log.info("closed %d postings past their deadline", expired)
+            log.info("deleted %d postings past their deadline", expired)
             return summaries
         except Exception as e:
             STATE.error = f"{type(e).__name__}: {e}"
@@ -115,7 +115,7 @@ def run_source(conn, browser: Browser, source: str, settings: Settings, *, detai
     run_id = db.start_run(conn, source, started)
     stats: Counter = Counter()
     status, error = "ok", None
-    open_before = db.count_open(conn, source)
+    stored_before = db.count_postings(conn, source)
     seeding = not db.has_postings(conn, source)  # first run: the backlog has no meaningful "first seen" date
     STATE.source, STATE.phase = source, "목록 수집"
     log.info("[%s] listing…", source)
@@ -134,9 +134,9 @@ def run_source(conn, browser: Browser, source: str, settings: Settings, *, detai
         log.info("[%s] listed %d (new %d)", source, stats["listed"], stats["new"])
 
         complete = scraper.listing_complete
-        if complete and open_before > 50 and stats["listed"] < open_before * 0.5:
+        if complete and stored_before > 50 and stats["listed"] < stored_before * 0.5:
             log.warning("[%s] listing shrank from %d to %d; skipping the closed-posting sweep",
-                        source, open_before, stats["listed"])
+                        source, stored_before, stats["listed"])
             complete = False
 
         if details and scraper.enrich_with_details:
@@ -165,7 +165,7 @@ def run_source(conn, browser: Browser, source: str, settings: Settings, *, detai
                     if detail.state == "unknown" and detail.reason == NO_RESPONSE:
                         closed = False  # blocked or offline: says nothing about the posting, check again next run
                     elif detail.state == "unknown":
-                        closed = db.bump_missing(conn, source, sid, settings.missing_runs_to_close, now)
+                        closed = db.bump_missing(conn, source, sid, settings.missing_runs_to_close)
                     else:
                         closed = db.apply_detail(conn, source, sid, detail, now) == "closed"
                     stats["closed"] += closed

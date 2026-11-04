@@ -1,4 +1,4 @@
-"""SQLite storage: postings, their open/closed lifecycle, and the search behind the UI."""
+"""SQLite storage for open postings (closed ones are deleted) and the search behind the UI."""
 from __future__ import annotations
 
 import json
@@ -37,9 +37,6 @@ CREATE TABLE IF NOT EXISTS jobs (
     search_text TEXT NOT NULL DEFAULT '',
     title_text TEXT NOT NULL DEFAULT '',
     dedupe_key TEXT NOT NULL DEFAULT '',
-    status TEXT NOT NULL DEFAULT 'open',   -- open | closed
-    closed_reason TEXT,
-    closed_at TEXT,
     first_seen_at TEXT NOT NULL,
     last_seen_at TEXT NOT NULL,
     last_checked_at TEXT,
@@ -49,8 +46,8 @@ CREATE TABLE IF NOT EXISTS jobs (
     seeded INTEGER NOT NULL DEFAULT 0,     -- inserted by a site's first run: first_seen_at is not a posting date
     UNIQUE (source, source_id)
 );
-CREATE INDEX IF NOT EXISTS idx_jobs_visible ON jobs (status, deadline);
-CREATE INDEX IF NOT EXISTS idx_jobs_source ON jobs (source, status, last_seen_at);
+CREATE INDEX IF NOT EXISTS idx_jobs_deadline ON jobs (deadline);
+CREATE INDEX IF NOT EXISTS idx_jobs_source_seen ON jobs (source, last_seen_at);
 CREATE INDEX IF NOT EXISTS idx_jobs_dedupe ON jobs (dedupe_key);
 
 CREATE TABLE IF NOT EXISTS scrape_runs (
@@ -62,8 +59,7 @@ CREATE TABLE IF NOT EXISTS scrape_runs (
     listed INTEGER NOT NULL DEFAULT 0,
     new INTEGER NOT NULL DEFAULT 0,
     updated INTEGER NOT NULL DEFAULT 0,
-    reopened INTEGER NOT NULL DEFAULT 0,
-    closed INTEGER NOT NULL DEFAULT 0,
+    closed INTEGER NOT NULL DEFAULT 0,      -- postings deleted as closed
     details INTEGER NOT NULL DEFAULT 0,
     verified INTEGER NOT NULL DEFAULT 0,
     error TEXT
@@ -77,7 +73,8 @@ _RECORD_KEYS = ("url", "title", "company", "locations", "career_min", "career_ma
                 "categories", "employment_type", "deadline", "posted_at", "description", "extra")
 _JSON_COLUMNS = ("locations", "skills", "categories", "extra")
 _KEEP_IF_EMPTY = ("description", "posted_at", "employment_type", "career_text", "skills", "categories")
-VISIBLE = "status = 'open' AND (deadline IS NULL OR deadline >= :today)"
+# Closed postings are deleted while scraping; this also hides ones whose deadline passed since.
+VISIBLE = "(deadline IS NULL OR deadline >= :today)"
 # When a site gives no posting date, the day we first saw it stands in — except for the
 # backlog collected by a site's very first run, which would all look like "today".
 LISTED_DATE = "COALESCE(posted_at, CASE WHEN seeded = 0 THEN substr(first_seen_at, 1, 10) END)"
@@ -97,6 +94,9 @@ def connect(path: Path | str) -> sqlite3.Connection:
     for column, ddl in _ADDED_COLUMNS.items():
         if column not in existing:
             conn.execute(f"ALTER TABLE jobs ADD COLUMN {column} {ddl}")
+    if "status" in existing:  # databases from before closed postings were deleted
+        conn.execute("DELETE FROM jobs WHERE status != 'open'")
+        conn.commit()
     return conn
 
 
@@ -181,10 +181,20 @@ def _write(conn: sqlite3.Connection, job_id: int, rec: dict, **extra_columns) ->
     conn.execute(f"UPDATE jobs SET {assignments} WHERE id = :_id", {**values, "_id": job_id})
 
 
+def _delete(conn: sqlite3.Connection, source: str, source_id: str) -> bool:
+    cur = conn.execute("DELETE FROM jobs WHERE source = ? AND source_id = ?", (source, source_id))
+    return cur.rowcount > 0
+
+
 def upsert_listing(conn: sqlite3.Connection, posting: Posting, now: str, today: str, *, seeding: bool = False) -> str:
-    """Store a posting seen in a site's listing. Returns new | updated | reopened | closed."""
+    """Store a posting seen in a site's listing. Returns new | updated | closed | skipped.
+
+    A posting the listing marks closed, or whose deadline has passed, is deleted ('closed'),
+    or never stored if we had not seen it before ('skipped').
+    """
+    if not posting.is_open or (posting.deadline and posting.deadline < today):
+        return "closed" if _delete(conn, posting.source, posting.source_id) else "skipped"
     incoming = _record(posting)
-    is_open = posting.is_open and not (posting.deadline and posting.deadline < today)
     row = conn.execute(
         "SELECT * FROM jobs WHERE source = ? AND source_id = ?", (posting.source, posting.source_id)
     ).fetchone()
@@ -194,26 +204,15 @@ def upsert_listing(conn: sqlite3.Connection, posting: Posting, now: str, today: 
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             (posting.source, posting.source_id, posting.url, posting.title, posting.company, now, now, int(seeding)),
         )
-        status = {"status": "open"} if is_open else {"status": "closed", "closed_reason": "listing", "closed_at": now}
-        _write(conn, cur.lastrowid, incoming, **status)
-        return "new" if is_open else "closed"
-
+        _write(conn, cur.lastrowid, incoming)
+        return "new"
     current = _decode(row)
-    merged = _merge(current, incoming)
-    columns: dict = {"last_seen_at": now, "missing_runs": 0}
-    result = "updated"
-    if is_open and current["status"] == "closed":
-        columns.update(status="open", closed_reason=None, closed_at=None)
-        result = "reopened"
-    elif not is_open and current["status"] == "open":
-        columns.update(status="closed", closed_reason="deadline" if posting.is_open else "listing", closed_at=now)
-        result = "closed"
-    _write(conn, current["id"], merged, **columns)
-    return result
+    _write(conn, current["id"], _merge(current, incoming), last_seen_at=now, missing_runs=0)
+    return "updated"
 
 
 def apply_detail(conn: sqlite3.Connection, source: str, source_id: str, detail: Detail, now: str) -> str:
-    """Merge a detail lookup into the stored posting. Returns the resulting state."""
+    """Merge a detail lookup into the stored posting, or delete it if closed. Returns open | closed | unknown."""
     row = conn.execute("SELECT * FROM jobs WHERE source = ? AND source_id = ?", (source, source_id)).fetchone()
     if row is None:
         return "unknown"
@@ -223,11 +222,7 @@ def apply_detail(conn: sqlite3.Connection, source: str, source_id: str, detail: 
                detail_fetched_at=now, last_checked_at=now)
         return "open"
     if detail.state in ("closed", "missing"):
-        conn.execute(
-            "UPDATE jobs SET status = 'closed', closed_reason = ?, closed_at = COALESCE(closed_at, ?), "
-            "last_checked_at = ? WHERE id = ?",
-            (detail.reason or detail.state, now, now, current["id"]),
-        )
+        _delete(conn, source, source_id)
         return "closed"
     conn.execute(
         "UPDATE jobs SET detail_attempts = detail_attempts + 1, last_checked_at = ? WHERE id = ?",
@@ -248,7 +243,7 @@ def rederive(conn: sqlite3.Connection) -> int:
 
 def ids_needing_detail(conn: sqlite3.Connection, source: str, limit: int) -> list[str]:
     rows = conn.execute(
-        "SELECT source_id FROM jobs WHERE source = ? AND status = 'open' AND detail_fetched_at IS NULL "
+        "SELECT source_id FROM jobs WHERE source = ? AND detail_fetched_at IS NULL "
         "AND detail_attempts < 3 ORDER BY first_seen_at DESC, id DESC LIMIT ?",
         (source, limit),
     ).fetchall()
@@ -256,42 +251,36 @@ def ids_needing_detail(conn: sqlite3.Connection, source: str, limit: int) -> lis
 
 
 def open_ids_not_seen(conn: sqlite3.Connection, source: str, since: str, limit: int) -> list[str]:
-    """Open postings a complete listing did not include — candidates for being closed."""
+    """Stored postings a complete listing did not include — candidates for deletion."""
     rows = conn.execute(
-        "SELECT source_id FROM jobs WHERE source = ? AND status = 'open' AND last_seen_at < ? "
+        "SELECT source_id FROM jobs WHERE source = ? AND last_seen_at < ? "
         "ORDER BY last_checked_at IS NOT NULL, last_checked_at LIMIT ?",
         (source, since, limit),
     ).fetchall()
     return [r["source_id"] for r in rows]
 
 
-def count_open(conn: sqlite3.Connection, source: str) -> int:
-    return conn.execute("SELECT COUNT(*) FROM jobs WHERE source = ? AND status = 'open'", (source,)).fetchone()[0]
+def count_postings(conn: sqlite3.Connection, source: str) -> int:
+    return conn.execute("SELECT COUNT(*) FROM jobs WHERE source = ?", (source,)).fetchone()[0]
 
 
 def has_postings(conn: sqlite3.Connection, source: str) -> bool:
     return conn.execute("SELECT 1 FROM jobs WHERE source = ? LIMIT 1", (source,)).fetchone() is not None
 
 
-def bump_missing(conn: sqlite3.Connection, source: str, source_id: str, threshold: int, now: str) -> bool:
-    """Count an inconclusive check for an unlisted posting; close it once it keeps happening."""
+def bump_missing(conn: sqlite3.Connection, source: str, source_id: str, threshold: int) -> bool:
+    """Count an inconclusive check for an unlisted posting; delete it once it keeps happening."""
     conn.execute(
         "UPDATE jobs SET missing_runs = missing_runs + 1 WHERE source = ? AND source_id = ?", (source, source_id)
     )
     cur = conn.execute(
-        "UPDATE jobs SET status = 'closed', closed_reason = 'not_listed', closed_at = ? "
-        "WHERE source = ? AND source_id = ? AND status = 'open' AND missing_runs >= ?",
-        (now, source, source_id, threshold),
+        "DELETE FROM jobs WHERE source = ? AND source_id = ? AND missing_runs >= ?", (source, source_id, threshold)
     )
     return cur.rowcount > 0
 
 
-def close_expired(conn: sqlite3.Connection, today: str, now: str) -> int:
-    cur = conn.execute(
-        "UPDATE jobs SET status = 'closed', closed_reason = 'deadline', closed_at = ? "
-        "WHERE status = 'open' AND deadline IS NOT NULL AND deadline < ?",
-        (now, today),
-    )
+def delete_expired(conn: sqlite3.Connection, today: str) -> int:
+    cur = conn.execute("DELETE FROM jobs WHERE deadline IS NOT NULL AND deadline < ?", (today,))
     return cur.rowcount
 
 
@@ -306,9 +295,9 @@ def start_run(conn: sqlite3.Connection, source: str, now: str) -> int:
 def finish_run(conn: sqlite3.Connection, run_id: int, status: str, stats: Counter, now: str,
                error: str | None = None) -> None:
     conn.execute(
-        "UPDATE scrape_runs SET finished_at = ?, status = ?, listed = ?, new = ?, updated = ?, reopened = ?, "
+        "UPDATE scrape_runs SET finished_at = ?, status = ?, listed = ?, new = ?, updated = ?, "
         "closed = ?, details = ?, verified = ?, error = ? WHERE id = ?",
-        (now, status, stats["listed"], stats["new"], stats["updated"], stats["reopened"], stats["closed"],
+        (now, status, stats["listed"], stats["new"], stats["updated"], stats["closed"],
          stats["details"], stats["verified"], error, run_id),
     )
     conn.commit()
@@ -331,11 +320,6 @@ def latest_runs(conn: sqlite3.Connection) -> list[dict]:
 
 def recent_runs(conn: sqlite3.Connection, limit: int = 30) -> list[dict]:
     return [dict(r) for r in conn.execute("SELECT * FROM scrape_runs ORDER BY id DESC LIMIT ?", (limit,))]
-
-
-def last_success_at(conn: sqlite3.Connection) -> str | None:
-    row = conn.execute("SELECT MAX(finished_at) FROM scrape_runs WHERE status IN ('ok', 'partial')").fetchone()
-    return row[0]
 
 
 # -- searching ----------------------------------------------------------------------
@@ -474,20 +458,18 @@ def _attach_other_sources(conn: sqlite3.Connection, items: list[dict], today: st
         item["also_on"] = [o for o in by_key.get(item["dedupe_key"], []) if o["id"] != item["id"]]
 
 
-def get_job(conn: sqlite3.Connection, job_id: int, today: str) -> dict | None:
+def get_job(conn: sqlite3.Connection, job_id: int) -> dict | None:
     row = conn.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
     if row is None:
         return None
     rec = _decode(row)
-    visible = rec["status"] == "open" and (rec["deadline"] is None or rec["deadline"] >= today)
     return {
         "id": rec["id"], "source": rec["source"], "url": rec["url"], "title": rec["title"],
         "company": rec["company"], "locations": rec["locations"], "location": rec["location_text"],
         "career": career_label(rec["career_min"], rec["career_max"], rec["career_text"]),
         "skills": rec["skills"], "categories": rec["categories"], "employment_type": rec["employment_type"],
         "deadline": rec["deadline"], "posted_at": rec["posted_at"], "description": rec["description"],
-        "status": rec["status"] if visible else "closed", "first_seen_at": rec["first_seen_at"],
-        "last_seen_at": rec["last_seen_at"],
+        "first_seen_at": rec["first_seen_at"], "last_seen_at": rec["last_seen_at"],
     }
 
 
