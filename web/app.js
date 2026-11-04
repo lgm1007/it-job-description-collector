@@ -371,10 +371,8 @@ function renderStatus() {
     const finished = lastRuns.map((r) => r.finished_at).filter(Boolean).sort().pop();
     const parts = [finished ? `최근 수집 ${fmtDateTime(finished)}` : '아직 수집 전'];
     parts.push(`공고 ${meta.unique_total.toLocaleString()}건`);
-    if (meta.next_scrape_at) parts.push(`다음 ${fmtDateTime(meta.next_scrape_at)}`);
     $('#status-text').textContent = parts.join(' · ');
   }
-  $('#scrape-time').textContent = meta.scrape_time;
 
   const body = $('#runs-body');
   body.replaceChildren();

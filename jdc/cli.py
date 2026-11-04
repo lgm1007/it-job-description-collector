@@ -45,10 +45,9 @@ def main(argv: list[str] | None = None) -> int:
     scrape.add_argument("--source", action="append", choices=ALL_SOURCES, help="특정 사이트만 (여러 번 지정 가능)")
     scrape.add_argument("--no-details", action="store_true", help="새 공고의 상세 정보를 가져오지 않습니다")
 
-    serve = sub.add_parser("serve", help="웹 서버를 띄우고 매일 자동 수집합니다")
+    serve = sub.add_parser("serve", help="웹 화면을 띄웁니다 (수집은 scrape 또는 화면의 '지금 수집')")
     serve.add_argument("--host")
     serve.add_argument("--port", type=int)
-    serve.add_argument("--no-scheduler", action="store_true", help="자동 수집 없이 웹 서버만")
 
     sub.add_parser("stats", help="저장된 공고 현황")
     sub.add_parser("reindex", help="지역·검색어·중복 판단을 저장된 데이터로 다시 계산합니다 (정규화 규칙을 바꾼 뒤)")
@@ -73,8 +72,7 @@ def main(argv: list[str] | None = None) -> int:
 
         from .api import create_app
 
-        app = create_app(settings, scheduler=not args.no_scheduler)
-        uvicorn.run(app, host=args.host or settings.host, port=args.port or settings.port)
+        uvicorn.run(create_app(settings), host=args.host or settings.host, port=args.port or settings.port)
         return 0
 
     if args.command == "reindex":

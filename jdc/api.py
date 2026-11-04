@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from contextlib import asynccontextmanager, contextmanager
+from contextlib import contextmanager
 from dataclasses import asdict
 from typing import Literal
 
@@ -24,23 +24,11 @@ def _split(values: list[str]) -> list[str]:
     return [v.strip() for value in values for v in value.split(",") if v.strip()]
 
 
-def create_app(settings: Settings | None = None, *, scheduler: bool = True) -> FastAPI:
+def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or load_settings()
     db.connect(settings.db_path).close()  # create the schema up front
 
-    @asynccontextmanager
-    async def lifespan(app: FastAPI):
-        sched = None
-        if scheduler:
-            from .scheduler import start_scheduler
-
-            sched = start_scheduler(settings)
-        app.state.scheduler = sched
-        yield
-        if sched is not None:
-            sched.shutdown(wait=False)
-
-    app = FastAPI(title="개발자 채용공고 모아보기", lifespan=lifespan)
+    app = FastAPI(title="개발자 채용공고 모아보기")
 
     @app.middleware("http")
     async def revalidate_ui(request, call_next):
@@ -94,7 +82,6 @@ def create_app(settings: Settings | None = None, *, scheduler: bool = True) -> F
         with connection() as conn:
             counts = db.facets(conn, today)
             runs = db.latest_runs(conn)
-        job = app.state.scheduler.get_job("daily-scrape") if getattr(app.state, "scheduler", None) else None
         scrape = asdict(STATE)
         if not scrape["running"]:  # a `jdc scrape` started from the command line
             active = next((r for r in runs if r["status"] == "running"), None)
@@ -111,8 +98,6 @@ def create_app(settings: Settings | None = None, *, scheduler: bool = True) -> F
             "unique_total": counts["unique_total"],
             "runs": runs,
             "scrape": scrape,
-            "next_scrape_at": job.next_run_time.isoformat() if job and job.next_run_time else None,
-            "scrape_time": settings.scrape_time,
         }
 
     @app.get("/api/runs")

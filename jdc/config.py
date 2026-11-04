@@ -34,8 +34,6 @@ class Settings:
     data_dir: Path
     host: str
     port: int
-    scrape_time: str
-    scrape_on_start: bool
     sources: tuple[str, ...]
     chrome_path: str | None
     cdp_port: int
@@ -45,7 +43,6 @@ class Settings:
     detail_concurrency: int
     max_details: int
     verify_limit: int
-    timezone: str = "Asia/Seoul"
     # Postings missing from a complete listing whose detail check is inconclusive
     # are closed after this many consecutive runs.
     missing_runs_to_close: int = 3
@@ -80,8 +77,6 @@ def load_settings() -> Settings:
         data_dir=data_dir,
         host=_env("HOST", "127.0.0.1"),
         port=int(_env("PORT", "8000")),
-        scrape_time=_env("SCRAPE_TIME", "06:00"),
-        scrape_on_start=_bool("SCRAPE_ON_START", True),
         sources=sources,
         chrome_path=_env("CHROME_PATH", "") or None,
         cdp_port=int(_env("CDP_PORT", "9333")),

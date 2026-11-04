@@ -16,7 +16,7 @@ def client(settings, monkeypatch):
     conn.commit()
     conn.close()
     monkeypatch.setattr(api, "start_background_scrape", lambda settings, sources=None: True)
-    with TestClient(api.create_app(settings, scheduler=False)) as c:
+    with TestClient(api.create_app(settings)) as c:
         yield c
 
 

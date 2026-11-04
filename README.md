@@ -1,9 +1,9 @@
 # dev-jobs — 개발자 채용공고 모아보기
 
 원티드 · 리멤버 · 잡플래닛 · 점핏 · 사람인 · 잡코리아의 개발 직군 채용공고를
-[browser-harness](https://github.com/browser-use/browser-harness)로 매일 수집해서,
+[browser-harness](https://github.com/browser-use/browser-harness)로 수집해서,
 키워드 · 지역 · 경력 같은 조건으로 한 번에 찾는 로컬 웹 서비스입니다.
-마감된 공고는 매일 수집하면서 걸러내고 화면에 보여주지 않습니다.
+수집은 필요할 때 직접 실행하고, 그때마다 마감된 공고를 걸러내 화면에 보여주지 않습니다.
 
 > **개인 용도로만 쓰세요.** 수집한 채용정보를 다른 사람에게 공개하거나 서비스로 제공하지 마세요.
 > 자세한 내용은 [이용 안내](#이용-안내)를 확인하세요.
@@ -27,15 +27,16 @@ python3 -m venv .venv
 
 `scrape`는 지금 바로 수집합니다. 첫 실행은 모든 공고의 상세 정보까지 받느라 20~30분쯤 걸리고,
 이후에는 새 공고만 상세 조회해서 훨씬 빨라집니다.
-`serve`는 <http://127.0.0.1:8000>에 화면을 띄우고 매일 06:00(한국 시간)에 자동으로 수집합니다.
+`serve`는 <http://127.0.0.1:8000>에 화면을 띄웁니다. 자동 수집은 없고, 새로 받고 싶을 때
+`scrape`를 다시 실행하거나 화면의 "지금 수집" 버튼을 누르면 됩니다.
 
 ## 동작 방식
 
 ```
-jdc scrape  또는  매일 06:00 (jdc serve 안의 스케줄러)
+jdc scrape  또는  화면의 "지금 수집" 버튼
   └─ 전용 Chrome  (headless, --remote-debugging-port=9333, 프로필: .data/chrome-profile)
        └─ browser-harness 데몬  (CDP로 Chrome 제어)
-            └─ 사이트마다 탭을 하나 열고, 그 페이지 안에서 fetch()로 사이트 자체 API를 호출
+            └─ 탭 하나로 사이트를 차례로 옮겨 가며, 그 페이지 안에서 fetch()로 사이트 자체 API를 호출
   → SQLite (.data/jobs.sqlite3)  → FastAPI (/api/*)  → 웹 화면 (web/)
 ```
 
@@ -78,7 +79,7 @@ jdc scrape  또는  매일 06:00 (jdc serve 안의 스케줄러)
 - **지역**: 시/도 여러 개를 고를 수 있고, 하나만 고르면 구·시 단위로 좁힐 수 있습니다.
 - **사이트**, **등록일**(3·7·14일 이내), **최신순 / 마감순**
 - **같은 공고 합치기**: 회사명과 제목이 같은 공고는 한 줄로 보여주고, 다른 사이트 링크는 `└ also`에 붙입니다.
-- 검색 조건이 URL에 남아서 북마크해 두고 매일 같은 조건으로 볼 수 있습니다.
+- 검색 조건이 URL에 남아서 북마크해 두고 다음에도 같은 조건으로 볼 수 있습니다.
 - 단축키: `/` 검색, `j`·`k` 이동, `⏎` 원문 열기, `␣` 상세 펼치기, `[`·`]` 페이지, `s` 정렬, `m` 합치기, `t` 테마, `?` 도움말
 
 ## 명령어
@@ -86,27 +87,12 @@ jdc scrape  또는  매일 06:00 (jdc serve 안의 스케줄러)
 | 명령 | 설명 |
 |---|---|
 | `python -m jdc scrape` | 지금 수집합니다. `--source wanted --source jumpit`처럼 일부만, `--no-details`로 상세 조회 생략 |
-| `python -m jdc serve` | 웹 서버 + 매일 자동 수집. `--no-scheduler`면 화면만 띄웁니다 |
+| `python -m jdc serve` | 웹 화면을 띄웁니다. `--host`, `--port`로 주소를 바꿀 수 있습니다 |
 | `python -m jdc stats` | 사이트별 노출 중·마감 공고 수와 최근 수집 결과 |
 | `python -m jdc reindex` | 지역·검색어·중복 판단을 저장된 데이터로 다시 계산 (정규화 규칙을 고친 뒤, 다시 수집하지 않고 반영) |
 
 CLI와 서버가 동시에 수집하지 않도록 파일 락(`.data/scrape.lock`)을 씁니다.
 화면 오른쪽 아래 "지금 수집" 버튼으로도 수집할 수 있고, "수집 현황"에서 사이트별 결과와 오류를 볼 수 있습니다.
-
-## 매일 자동 수집
-
-`python -m jdc serve`를 켜 두면 매일 `JDC_SCRAPE_TIME`(기본 06:00, 한국 시간)에 수집합니다.
-서버를 켤 때 마지막 성공 수집이 24시간보다 오래됐으면 바로 한 번 수집합니다.
-
-서버를 계속 켜 두지 않는다면 cron으로 수집만 돌려도 됩니다.
-
-```bash
-crontab -e
-```
-
-```
-0 6 * * * cd /path/to/job-description-collector && .venv/bin/python -m jdc scrape >> .data/cron.log 2>&1
-```
 
 ## 설정
 
@@ -116,8 +102,6 @@ crontab -e
 |---|---|---|
 | `JDC_DATA_DIR` | `.data` | DB, 전용 Chrome 프로필, browser-harness 상태 |
 | `JDC_HOST` / `JDC_PORT` | `127.0.0.1` / `8000` | 웹 서버 주소 |
-| `JDC_SCRAPE_TIME` | `06:00` | 매일 수집 시각 (한국 시간) |
-| `JDC_SCRAPE_ON_START` | `1` | 서버 시작 시 수집이 오래됐으면 바로 수집 |
 | `JDC_SOURCES` | 여섯 곳 모두 | `wanted,remember,jobplanet,jumpit,saramin,jobkorea` 중 일부 |
 | `JDC_CHROME_PATH` | 자동 탐색 | Chrome 실행 파일 경로 |
 | `JDC_CDP_PORT` | `9333` | 전용 Chrome의 원격 디버깅 포트 |
@@ -163,12 +147,11 @@ PY
 jdc/
   browser.py       전용 Chrome 실행 + browser-harness 탭에서 fetch 실행
   scrapers/        사이트별 수집기 (목록 페이징, 상세 조회, 응답 파싱)
-  pipeline.py      하루 수집 흐름과 마감 공고 판단
+  pipeline.py      수집 한 번의 흐름과 마감 공고 판단
   db.py            SQLite 저장, 병합, 검색 쿼리
   normalize.py     지역·경력·날짜·회사명 정규화
   api.py           FastAPI (/api/jobs, /api/jobs/{id}, /api/meta, /api/scrape)
-  scheduler.py     매일 수집 스케줄 (APScheduler)
-  cli.py           python -m jdc scrape | serve | stats
+  cli.py           python -m jdc scrape | serve | stats | reindex
 web/               화면 (HTML/CSS/JS, 빌드 없음)
 tests/             파서·DB·파이프라인·API 테스트
 ```
@@ -187,8 +170,8 @@ tests/             파서·DB·파이프라인·API 테스트
   판결(서울고법 2016나2019365)이 있습니다.
 - 각 사이트의 이용약관과 robots.txt를 확인하고 지키는 것은 사용자의 책임입니다.
   사이트가 자동 수집을 금지하거나 중단을 요청하면 `JDC_SOURCES`에서 그 사이트를 빼세요.
-- 사이트에 부담을 주지 않도록 하루 한 번 수집을 기본으로 하고, 요청 간격(0.7초 이상, 리멤버는 2.6초)과
-  동시 요청 수(3)를 보수적으로 잡아 두었습니다. 이 값을 낮추지 마세요.
+- 사이트에 부담을 주지 않도록 수집은 하루 한 번 이하로 실행하세요. 요청 간격(0.7초 이상, 리멤버는 2.6초)과
+  동시 요청 수(3)도 보수적으로 잡아 두었으니 낮추지 마세요.
 - 웹 화면은 기본적으로 내 컴퓨터(`127.0.0.1`)에서만 열립니다. 인터넷에 공개하지 마세요.
 - 코드는 있는 그대로 제공되며, 사용으로 생기는 문제에 대한 책임은 사용자에게 있습니다.
 

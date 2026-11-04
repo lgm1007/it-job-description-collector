@@ -12,7 +12,6 @@ dependencies = [
     "browser-harness==0.1.13",
     "fastapi>=0.110",
     "uvicorn[standard]>=0.29",
-    "apscheduler>=3.10,<4",
     "tzdata; platform_system == 'Windows'",
 ]
 

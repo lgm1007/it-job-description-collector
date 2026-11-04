@@ -28,7 +28,6 @@ def conn():
 @pytest.fixture
 def settings(tmp_path):
     return Settings(
-        data_dir=tmp_path, host="127.0.0.1", port=8000, scrape_time="06:00", scrape_on_start=False,
-        sources=("wanted",), chrome_path=None, cdp_port=9333, headless=True, close_browser=True,
+        data_dir=tmp_path, host="127.0.0.1", port=8000, sources=("wanted",), chrome_path=None, cdp_port=9333, headless=True, close_browser=True,
         request_delay=0, detail_concurrency=1, max_details=100, verify_limit=100,
     )
