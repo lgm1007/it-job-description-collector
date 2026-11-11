@@ -8,8 +8,6 @@ from jdc.normalize import (
     dedupe_key,
     month_day_to_date,
     normalize_location,
-    split_terms,
-    term_pattern,
     to_date,
 )
 
@@ -117,19 +115,3 @@ def test_dedupe_key_ignores_company_suffixes_and_punctuation():
     assert dedupe_key("(주)버즈빌", "[광고] 백엔드 엔지니어") == dedupe_key("버즈빌", "[광고]백엔드 엔지니어")
     assert dedupe_key("Foo Inc.", "Backend") == dedupe_key("foo", "backend")
     assert dedupe_key("버즈빌", "백엔드") != dedupe_key("버즈빌", "프론트엔드")
-
-
-def test_split_terms():
-    assert split_terms("  Kotlin, Spring  백엔드 ") == ["kotlin", "spring", "백엔드"]
-    assert split_terms(None) == []
-
-
-def test_term_pattern_short_and_ambiguous_terms():
-    go = term_pattern("go")
-    assert go.search("go 백엔드") and go.search("go/kotlin") and not go.search("google")
-    assert term_pattern("ai").search("생성형ai 엔지니어") and not term_pattern("ai").search("email")
-    java = term_pattern("java")
-    assert java.search("java, spring") and not java.search("javascript")
-    cpp = term_pattern("c")
-    assert not cpp.search("c++ 개발") and cpp.search("c 언어")
-    assert term_pattern("kotlin") is None and term_pattern("백엔드") is None

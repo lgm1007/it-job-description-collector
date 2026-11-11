@@ -11,10 +11,8 @@ from __future__ import annotations
 
 import logging
 import os
-import threading
 from collections import Counter
 from collections.abc import Iterable, Iterator
-from dataclasses import dataclass
 
 from . import db
 from .browser import Browser
@@ -28,27 +26,12 @@ log = logging.getLogger(__name__)
 NO_RESPONSE = "http:0"
 
 
-@dataclass
-class RunState:
-    """Progress of the scrape running in this process, for the UI."""
-
-    running: bool = False
-    source: str | None = None
-    phase: str | None = None
-    started_at: str | None = None
-    finished_at: str | None = None
-    error: str | None = None
-
-
-STATE = RunState()
-
-
 class AlreadyRunning(RuntimeError):
     pass
 
 
 class ScrapeLock:
-    """Cross-process lock so the CLI and the server never drive the browser at once."""
+    """Cross-process lock so two commands never drive the browser, or read a half-finished scrape, at once."""
 
     def __init__(self, path):
         self.path = path
@@ -88,7 +71,6 @@ def run_scrape(settings: Settings, sources: Iterable[str] | None = None, *, deta
     with ScrapeLock(settings.lock_path) as acquired:
         if not acquired:
             raise AlreadyRunning("다른 수집이 이미 진행 중입니다")
-        STATE.running, STATE.started_at, STATE.finished_at, STATE.error = True, now_kst().isoformat(), None, None
         conn = db.connect(settings.db_path)
         try:
             db.fail_stale_runs(conn, now_kst().isoformat())
@@ -100,13 +82,8 @@ def run_scrape(settings: Settings, sources: Iterable[str] | None = None, *, deta
             conn.commit()
             log.info("deleted %d postings past their deadline", expired)
             return summaries
-        except Exception as e:
-            STATE.error = f"{type(e).__name__}: {e}"
-            raise
         finally:
             conn.close()
-            STATE.running, STATE.source, STATE.phase = False, None, None
-            STATE.finished_at = now_kst().isoformat()
 
 
 def run_source(conn, browser: Browser, source: str, settings: Settings, *, details: bool = True) -> dict:
@@ -117,7 +94,6 @@ def run_source(conn, browser: Browser, source: str, settings: Settings, *, detai
     status, error = "ok", None
     stored_before = db.count_postings(conn, source)
     seeding = not db.has_postings(conn, source)  # first run: the backlog has no meaningful "first seen" date
-    STATE.source, STATE.phase = source, "목록 수집"
     log.info("[%s] listing…", source)
     try:
         tab = browser.open(scraper_cls.home_url)
@@ -140,7 +116,6 @@ def run_source(conn, browser: Browser, source: str, settings: Settings, *, detai
             complete = False
 
         if details and scraper.enrich_with_details:
-            STATE.phase = "상세 정보"
             pending = db.ids_needing_detail(conn, source, settings.max_details)
             log.info("[%s] fetching %d details…", source, len(pending))
             for chunk in _chunks(pending, scraper.detail_batch):
@@ -153,7 +128,6 @@ def run_source(conn, browser: Browser, source: str, settings: Settings, *, detai
                 scraper.pause()
 
         if complete:
-            STATE.phase = "마감 확인"
             limit = min(settings.verify_limit, scraper.max_verify or settings.verify_limit)
             unseen = db.open_ids_not_seen(conn, source, started, limit)
             log.info("[%s] verifying %d postings missing from the listing…", source, len(unseen))
@@ -182,20 +156,3 @@ def run_source(conn, browser: Browser, source: str, settings: Settings, *, detai
         db.finish_run(conn, run_id, status, stats, now_kst().isoformat(), error)
     log.info("[%s] %s: %s", source, status, dict(stats))
     return {"source": source, "status": status, "error": error, **stats}
-
-
-def start_background_scrape(settings: Settings, sources: Iterable[str] | None = None) -> bool:
-    """Kick off a scrape in a thread; False if one is already running."""
-    if STATE.running:
-        return False
-
-    def target() -> None:
-        try:
-            run_scrape(settings, sources)
-        except AlreadyRunning:
-            log.info("scrape skipped: another run holds the lock")
-        except Exception:  # noqa: BLE001
-            log.exception("background scrape failed")
-
-    threading.Thread(target=target, name="jdc-scrape", daemon=True).start()
-    return True

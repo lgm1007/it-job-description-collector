@@ -10,6 +10,5 @@ SCRAPERS: dict[str, type[Scraper]] = {
     cls.source: cls
     for cls in (WantedScraper, RememberScraper, JobPlanetScraper, JumpitScraper, SaraminScraper, JobKoreaScraper)
 }
-SOURCE_LABELS = {source: cls.label for source, cls in SCRAPERS.items()}
 
-__all__ = ["SCRAPERS", "SOURCE_LABELS", "Scraper", "ScrapeError"]
+__all__ = ["SCRAPERS", "Scraper", "ScrapeError"]

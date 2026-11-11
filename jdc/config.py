@@ -32,8 +32,6 @@ def _bool(name: str, default: bool) -> bool:
 @dataclass(frozen=True)
 class Settings:
     data_dir: Path
-    host: str
-    port: int
     sources: tuple[str, ...]
     chrome_path: str | None
     cdp_port: int
@@ -46,6 +44,8 @@ class Settings:
     # Postings missing from a complete listing whose detail check is inconclusive
     # are closed after this many consecutive runs.
     missing_runs_to_close: int = 3
+    # Where finished scrapes are uploaded for the web app; None keeps everything local.
+    supabase_db_url: str | None = None
 
     @property
     def db_path(self) -> Path:
@@ -75,8 +75,6 @@ def load_settings() -> Settings:
         raise ValueError(f"알 수 없는 JDC_SOURCES 값: {', '.join(sorted(unknown))}")
     return Settings(
         data_dir=data_dir,
-        host=_env("HOST", "127.0.0.1"),
-        port=int(_env("PORT", "8000")),
         sources=sources,
         chrome_path=_env("CHROME_PATH", "") or None,
         cdp_port=int(_env("CDP_PORT", "9333")),
@@ -86,4 +84,5 @@ def load_settings() -> Settings:
         detail_concurrency=max(1, int(_env("DETAIL_CONCURRENCY", "3"))),
         max_details=int(_env("MAX_DETAILS", "6000")),
         verify_limit=int(_env("VERIFY_LIMIT", "600")),
+        supabase_db_url=_env("SUPABASE_DB_URL", "") or None,
     )

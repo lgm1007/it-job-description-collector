@@ -1,0 +1,16 @@
+{
+  "name": "dev-jobs · 개발자 채용 모아보기",
+  "short_name": "dev-jobs",
+  "description": "국내 채용 사이트의 개발자 공고를 한 곳에서 찾아봅니다.",
+  "lang": "ko",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0c0f0e",
+  "theme_color": "#0c0f0e",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

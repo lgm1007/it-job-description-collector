@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import re
 from datetime import date, datetime, timedelta
-from functools import lru_cache
 from zoneinfo import ZoneInfo
 
 KST = ZoneInfo("Asia/Seoul")
@@ -223,24 +222,3 @@ def unique(items) -> list[str]:
 
 def fold(text: str) -> str:
     return re.sub(r"\s+", " ", (text or "").casefold()).strip()
-
-
-def split_terms(query: str | None) -> list[str]:
-    return [t for t in (fold(query or "").replace(",", " ").split(" ")) if t]
-
-
-@lru_cache(maxsize=256)
-def term_pattern(term: str) -> re.Pattern | None:
-    """Word-boundary pattern for short ASCII terms, so 'go' skips 'google' and 'java' skips 'javascript'.
-
-    Korean and longer terms match as plain substrings (handled by LIKE), which is what
-    Korean text with attached particles needs.
-    """
-    if not term.isascii():
-        return None
-    escaped = re.escape(term)
-    if len(term) <= 3:
-        return re.compile(rf"(?<![a-z0-9]){escaped}(?![a-z0-9+#])")
-    if term == "java":
-        return re.compile(rf"{escaped}(?!script)")
-    return None
