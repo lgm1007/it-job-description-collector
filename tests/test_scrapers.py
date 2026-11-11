@@ -1,4 +1,6 @@
 """Parsers against trimmed-down payloads shaped like each site's real responses."""
+import json
+import re
 from datetime import date
 
 from jdc.scrapers import jobkorea, jobplanet, jumpit, remember, saramin, wanted
@@ -104,6 +106,16 @@ def test_jobkorea_row_always_open():
     p = jobkorea.parse_row({"gno": "1", "title": "t", "company": "c", "cells": [], "side": "상시채용",
                             "braze": "t|1|2|2026-11-03|2070-01-01|c|3"})
     assert p.deadline is None
+
+
+def test_jobkorea_closed_wording():
+    # Snippets of real pages: one closed early (deadline still ahead), one open.
+    notice = "마감일은 기업의 사정으로 인해 조기 마감 또는 변경될 수 있습니다"
+    closed = notice + ' {"className":"font-bold text-[#d2d2d2]","children":"마감되었습니다."} 시작일 2026.10.22(목) 마감일 2026.11.21(토)'
+    open_ = notice + " 남은기간 시작일 2026.11.09(월) 마감일 2026.12.09(수)"
+    assert re.search(jobkorea.CLOSED_MARK, closed)
+    assert not re.search(jobkorea.CLOSED_MARK, open_)
+    assert json.dumps(jobkorea.CLOSED_MARK) in jobkorea._CHECK_JS  # the page script uses the same wording
 
 
 def test_jobkorea_check():

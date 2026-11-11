@@ -2,10 +2,12 @@
 
 목록: POST /Recruit/Home/_GI_List/ 가 HTML 조각을 돌려주므로 페이지 안에서 DOMParser로 읽어
       필요한 값만 JSON으로 넘깁니다 (pagesize=100, 총 건수는 #hdnGICnt).
-확인: /Recruit/GI_Read/{gno} — 삭제된 공고는 404, 그 외에는 JSON-LD의 validThrough로 판단합니다.
+확인: /Recruit/GI_Read/{gno} — 삭제된 공고는 404, 일찍 마감한 공고는 "마감되었습니다." 같은 문구,
+      그 외에는 JSON-LD의 validThrough로 판단합니다.
 """
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Iterator
 
@@ -54,8 +56,13 @@ async (page, pageSize) => {
 }
 """
 
+# Wording on a posting's page once it is closed. An open page shows "남은기간" in the same place,
+# and every page carries the notice "조기 마감 또는 변경될 수 있습니다", which must not match.
+CLOSED_MARK = "접수가 마감|마감된 공고|채용이 마감|모집이 마감|마감되었습니다"
+
 _CHECK_JS = r"""
 async (gnos, concurrency) => {
+  const closed = new RegExp(__CLOSED_MARK__);
   const one = async (gno) => {
     try {
       const res = await fetch('/Recruit/GI_Read/' + gno);
@@ -69,7 +76,7 @@ async (gnos, concurrency) => {
       return {
         gno, status: 200,
         validThrough: posting && posting.validThrough, datePosted: posting && posting.datePosted,
-        closedMark: /(접수가 마감|마감된 공고|채용이 마감|모집이 마감)/.test(html),
+        closedMark: closed.test(html),
       };
     } catch (e) {
       return {gno, status: 0, error: String(e)};
@@ -81,7 +88,7 @@ async (gnos, concurrency) => {
   await Promise.all(Array.from({length: Math.min(concurrency, gnos.length)}, worker));
   return out;
 }
-"""
+""".replace("__CLOSED_MARK__", json.dumps(CLOSED_MARK))
 
 def parse_row(row: dict) -> Posting:
     cells = row.get("cells") or []
