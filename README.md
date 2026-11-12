@@ -12,21 +12,15 @@
 
 ## 화면
 
-PC에서는 왼쪽에서 조건을 고르고 오른쪽 목록에서 공고를 고릅니다. 공고를 누르면 상세 정보와 본문이 펼쳐집니다.
+| PC · 검색 조건과 공고 목록 | PC · 키워드 검색과 공고 상세 |
+| :---: | :---: |
+| <img src="docs/screenshots/desktop.png" width="400" alt="PC 화면: 왼쪽 검색 조건과 오른쪽 공고 목록"> | <img src="docs/screenshots/desktop-detail.png" width="400" alt="PC 화면: kotlin으로 찾은 공고의 상세 정보와 본문"> |
 
-![PC 화면: 공고 목록](docs/screenshots/desktop.png)
+| 폰 · 공고 목록 | 폰 · 검색 조건 · 지역 선택 | 폰 · 공고 상세 |
+| :---: | :---: | :---: |
+| <img src="docs/screenshots/mobile.png" width="200" alt="폰 화면: 공고 목록"> | <img src="docs/screenshots/mobile-filters.png" width="200" alt="폰 화면: 서울을 고르면 구 단위로 좁히는 검색 조건"> | <img src="docs/screenshots/mobile-detail.png" width="200" alt="폰 화면: 공고 상세 정보와 본문"> |
 
-![PC 화면: 키워드로 찾은 공고의 상세 정보](docs/screenshots/desktop-detail.png)
-
-폰에서는 홈 화면에 설치해 앱처럼 씁니다. 왼쪽 위의 ≡ 버튼으로 검색 조건을 엽니다.
-
-<p>
-  <img src="docs/screenshots/mobile.png" width="260" alt="폰 화면: 공고 목록">
-  <img src="docs/screenshots/mobile-filters.png" width="260" alt="폰 화면: 검색 조건">
-  <img src="docs/screenshots/mobile-detail.png" width="260" alt="폰 화면: 공고 상세">
-</p>
-
-> 캡처에 나오는 회사와 공고는 화면을 보여 주려고 만든 예시 데이터입니다. 실제로 수집한 공고는 저장소에 올리지 않습니다.
+<sub>로컬 Supabase에 예시 데이터를 넣고 촬영했습니다. 캡처의 회사와 공고는 화면을 보여 주려고 만든 가짜 데이터이고, 실제로 수집한 공고는 저장소에 올리지 않습니다.</sub>
 
 ## 구성
 
