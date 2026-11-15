@@ -14,11 +14,11 @@
 
 | PC · 검색 조건과 공고 목록 | PC · 키워드 검색과 공고 상세 |
 | :---: | :---: |
-| <img src="docs/screenshots/desktop.png" width="400" alt="PC 화면: 왼쪽 검색 조건과 오른쪽 공고 목록"> | <img src="docs/screenshots/desktop-detail.png" width="400" alt="PC 화면: kotlin으로 찾은 공고의 상세 정보와 본문"> |
+| <img src="docs/screenshots/desktop.png" width="400" alt="PC 화면: 왼쪽 검색 조건과 오른쪽 공고 목록"> | <img src="docs/screenshots/desktop-detail.png" width="400" alt="PC 화면: kotlin 키워드에 기술스택(Kotlin, Spring)과 채용 절차(코딩테스트·2차면접 있음, 사전과제 없음)로 좁힌 공고의 상세 정보와 본문"> |
 
-| 폰 · 공고 목록 | 폰 · 검색 조건 · 지역 선택 | 폰 · 공고 상세 |
+| 폰 · 공고 목록 | 폰 · 기술스택 · 채용 절차 · 지역 선택 | 폰 · 공고 상세 |
 | :---: | :---: | :---: |
-| <img src="docs/screenshots/mobile.png" width="200" alt="폰 화면: 공고 목록"> | <img src="docs/screenshots/mobile-filters.png" width="200" alt="폰 화면: 서울을 고르면 구 단위로 좁히는 검색 조건"> | <img src="docs/screenshots/mobile-detail.png" width="200" alt="폰 화면: 공고 상세 정보와 본문"> |
+| <img src="docs/screenshots/mobile.png" width="200" alt="폰 화면: 공고 목록"> | <img src="docs/screenshots/mobile-filters.png" width="200" alt="폰 화면: 기술스택 선택, 채용 절차 단계별 있음·없음, 서울을 고르면 구 단위로 좁히는 지역 검색 조건"> | <img src="docs/screenshots/mobile-detail.png" width="200" alt="폰 화면: 공고 상세 정보와 본문"> |
 
 <sub>로컬 Supabase에 예시 데이터를 넣고 촬영했습니다. 캡처의 회사와 공고는 화면을 보여 주려고 만든 가짜 데이터이고, 실제로 수집한 공고는 저장소에 올리지 않습니다.</sub>
 
