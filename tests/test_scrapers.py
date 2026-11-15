@@ -79,6 +79,22 @@ def test_jobplanet_career_codes():
     assert jobplanet.parse_career({"type": [2], "years": 0}, "경력무관") == (0, None)
 
 
+def test_jobplanet_marks_jobkorea_relistings_as_needing_no_detail(settings):
+    scraper = jobplanet.JobPlanetScraper(tab=None, settings=settings)
+    page = {"data": {"total_count": 3, "recruits": [
+        {"id": 1766330, "title": "기술지원", "company": {"name": "지노피스"}, "jobkorea_posting_id": 50220900,
+         "posting_apply_type": "jobkorea_inlink"},
+        {"id": 1476181, "title": "백엔드", "company": {"name": "A"}, "jobkorea_posting_id": 49364991,
+         "posting_apply_type": "outlink"},  # also on Jobkorea, but this one has a body here
+        {"id": 1827833, "title": "보안 엔지니어", "company": {"name": "B"}, "posting_apply_type": "jobplanet"},
+    ]}}
+    scraper.get_json = lambda url: page
+    postings = [p for batch in scraper.iter_listing() for p in batch]
+    assert [p.extra["jobkorea_posting_id"] for p in postings] == [50220900, 49364991, None]
+    assert [scraper.needs_detail(p.source_id) for p in postings] == [False, True, True]
+    assert scraper.needs_detail("999")  # not seen in this run's listing, e.g. being re-checked
+
+
 def test_jobplanet_detail_states():
     assert jobplanet.parse_detail({}).state == "missing"
     assert jobplanet.parse_detail({"open": False}).state == "closed"

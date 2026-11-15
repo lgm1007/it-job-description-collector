@@ -2,6 +2,10 @@
 
 목록: /api/v3/job/postings (page_size=100, total_count 제공)
 상세: /api/v1/job/postings/{id} (open 여부·본문, 없는 공고는 data: {})
+
+목록의 대부분은 잡코리아 공고를 다시 올린 것(posting_apply_type: jobkorea_inlink)으로, 잡플래닛에는 본문이
+없고 상세 API도 본문 필드를 모두 null로 줍니다. 그래서 새로 본 공고라도 상세를 조회하지 않고, 업로드할 때
+jobkorea_posting_id로 잡코리아 원본과 같은 공고로 묶습니다(sync.py).
 """
 from __future__ import annotations
 
@@ -15,6 +19,7 @@ from .base import Scraper, sections
 
 PAGE_SIZE = 100
 OCCUPATIONS = "11600,11912"
+JOBKOREA_RELISTING = "jobkorea_inlink"  # posting_apply_type of a Jobkorea posting re-listed here
 # annual.type codes as the site uses them
 NEWCOMER, EXPERIENCED, ANY = 1, 2, 4
 
@@ -89,6 +94,13 @@ class JobPlanetScraper(Scraper):
     label = "잡플래닛"
     home_url = "https://www.jobplanet.co.kr/job"
 
+    def __init__(self, tab, settings):
+        super().__init__(tab, settings)
+        self.relisted: set[str] = set()  # this run's Jobkorea re-listings: no body to fetch
+
+    def needs_detail(self, source_id: str) -> bool:
+        return source_id not in self.relisted
+
     def iter_listing(self) -> Iterator[list[Posting]]:
         page, seen = 1, 0
         while True:
@@ -102,6 +114,9 @@ class JobPlanetScraper(Scraper):
             items = data.get("recruits") or []
             if items:
                 seen += len(items)
+                self.relisted.update(
+                    str(item["id"]) for item in items if item.get("posting_apply_type") == JOBKOREA_RELISTING
+                )
                 yield [parse_list_item(item) for item in items]
             if len(items) < PAGE_SIZE or (self.reported_total is not None and page * PAGE_SIZE >= self.reported_total):
                 break

@@ -81,6 +81,10 @@ class Scraper:
     def fetch_details(self, source_ids: list[str]) -> dict[str, Detail]:
         raise NotImplementedError
 
+    def needs_detail(self, source_id: str) -> bool:
+        """False when this run's listing showed the detail page has nothing to add for the posting."""
+        return True
+
     # -- helpers -------------------------------------------------------------------
     def pause(self) -> None:
         delay = max(self.settings.request_delay, self.min_interval)

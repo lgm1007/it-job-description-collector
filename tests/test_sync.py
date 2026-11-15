@@ -32,6 +32,20 @@ def test_unknown_hiring_process_stays_apart_from_none(conn):
     assert row(conn, "steps")["stacks"] == ["Kotlin", "Spring"]
 
 
+def test_jobplanet_relisting_goes_with_its_jobkorea_original(conn):
+    db.upsert_listing(conn, make_posting("50220900", source="jobkorea", company="㈜숲(SOOP CO., LTD.)",
+                                         title="[SOOP] 보안솔루션 운영"), NOW, TODAY)
+    db.upsert_listing(conn, make_posting("1834702", source="jobplanet", company="SOOP", title="[SOOP] 보안솔루션 운영",
+                                         extra={"jobkorea_posting_id": 50220900}), NOW, TODAY)
+    db.upsert_listing(conn, make_posting("1766330", source="jobplanet", company="지노피스", title="기술지원 엔지니어",
+                                         extra={"jobkorea_posting_id": 49999999}), NOW, TODAY)  # original not stored
+    assert row(conn, "1834702")["dedupe_key"] == row(conn, "50220900")["dedupe_key"]
+    assert row(conn, "1766330")["dedupe_key"] == "지노피스|기술지원엔지니어"
+    # Once the original is gone (closed), the re-listing stands on its own again.
+    db.upsert_listing(conn, make_posting("50220900", source="jobkorea", is_open=False), NOW, TODAY)
+    assert row(conn, "1834702")["dedupe_key"] == "soop|soop보안솔루션운영"
+
+
 def test_listed_date_falls_back_to_first_seen_except_for_a_first_run_backlog(conn):
     db.upsert_listing(conn, make_posting("later", posted_at=None), NOW, TODAY)
     db.upsert_listing(conn, make_posting("backlog", posted_at=None), NOW, TODAY, seeding=True)

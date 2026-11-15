@@ -28,6 +28,8 @@ COLUMNS = (
     "career_min", "career_max", "career", "skills", "stacks", "process", "categories", "employment_type",
     "deadline", "posted_at", "listed_at", "description", "title_text", "search_text", "dedupe_key", "content_hash",
 )
+# Sites that re-list another site's postings: the original's site, and the `extra` key holding its id there.
+_RELISTED_FROM = {"jobplanet": ("jobkorea", "jobkorea_posting_id")}
 # Below this many stored postings, a large share going away is not alarming.
 _GUARD_MIN_STORED = 50
 LOCAL_HOSTS = ("localhost", "127.0.0.1", "::1")  # the local Supabase for development has no TLS
@@ -65,7 +67,7 @@ def _date(value: str | None) -> str | None:
         return None
 
 
-def _row(rec: sqlite3.Row) -> dict:
+def _row(rec: sqlite3.Row, dedupe_key: str | None = None) -> dict:
     posted_at = _date(rec["posted_at"])
     row = {
         "source": rec["source"],
@@ -92,16 +94,35 @@ def _row(rec: sqlite3.Row) -> dict:
         "description": _clean(rec["description"]),
         "title_text": _clean(rec["title_text"]),
         "search_text": _clean(rec["search_text"]),
-        "dedupe_key": _clean(rec["dedupe_key"]),
+        "dedupe_key": _clean(dedupe_key or rec["dedupe_key"]),
     }
     row["content_hash"] = hashlib.sha256(json.dumps(row, ensure_ascii=False, sort_keys=True).encode()).hexdigest()[:32]
     return row
 
 
+def _original_keys(recs: list[sqlite3.Row]) -> dict[tuple[str, str], str]:
+    """Re-listed postings mapped to the dedupe key of their original, when that is stored too.
+
+    Jobplanet re-lists most of Jobkorea's postings, often under a differently written company
+    name ('SOOP' / '㈜숲(SOOP CO., LTD.)'), so company + title alone shows many of them twice.
+    """
+    keys = {(rec["source"], rec["source_id"]): rec["dedupe_key"] for rec in recs}
+    out = {}
+    for rec in recs:
+        if rec["source"] not in _RELISTED_FROM:
+            continue
+        origin, field = _RELISTED_FROM[rec["source"]]
+        original = json.loads(rec["extra"] or "{}").get(field)
+        if original and (key := keys.get((origin, str(original)))):
+            out[(rec["source"], rec["source_id"])] = key
+    return out
+
+
 def local_rows(local: sqlite3.Connection, today: str) -> list[dict]:
     """What the viewer should hold. Oldest first, so ids upstream keep the order postings appeared in."""
-    rows = local.execute(f"SELECT * FROM jobs WHERE {db.VISIBLE} ORDER BY id", {"today": today})
-    return [_row(rec) for rec in rows]
+    recs = local.execute(f"SELECT * FROM jobs WHERE {db.VISIBLE} ORDER BY id", {"today": today}).fetchall()
+    originals = _original_keys(recs)
+    return [_row(rec, originals.get((rec["source"], rec["source_id"]))) for rec in recs]
 
 
 def push(local: sqlite3.Connection, remote: psycopg.Connection, today: str, now: str, *, force: bool = False) -> SyncResult:

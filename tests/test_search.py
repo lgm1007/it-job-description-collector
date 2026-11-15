@@ -142,6 +142,17 @@ def test_same_posting_on_two_sites_is_collapsed(pg, load):
     assert [i["source"] for i in call(pg, sources=["jobkorea"])["items"]] == ["jobkorea"]
 
 
+def test_jobplanet_relisting_is_collapsed_with_its_jobkorea_original(pg, load):
+    load(
+        make_posting("50220900", source="jobkorea", company="㈜숲(SOOP CO., LTD.)", title="[SOOP] 보안솔루션 운영"),
+        make_posting("1834702", source="jobplanet", company="SOOP", title="[SOOP] 보안솔루션 운영",
+                     extra={"jobkorea_posting_id": 50220900}),
+    )
+    result = call(pg)
+    assert result["total"] == 1
+    assert [o["source"] for o in result["items"][0]["also_on"]] == ["jobkorea"]
+
+
 def test_first_run_backlog_without_dates_is_not_new(pg, load):
     load(make_posting("backlog", posted_at=None), make_posting("dated", posted_at="2026-10-20"), seeding=True)
     load(make_posting("later", posted_at=None))

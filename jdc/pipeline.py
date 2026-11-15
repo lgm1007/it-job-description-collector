@@ -17,6 +17,7 @@ from collections.abc import Iterable, Iterator
 from . import db
 from .browser import Browser
 from .config import Settings
+from .models import Detail
 from .normalize import now_kst, today_kst
 from .scrapers import SCRAPERS
 
@@ -117,6 +118,11 @@ def run_source(conn, browser: Browser, source: str, settings: Settings, *, detai
 
         if details and scraper.enrich_with_details:
             pending = db.ids_needing_detail(conn, source, settings.max_details)
+            now = now_kst().isoformat()
+            for sid in pending:  # nothing more to fetch: mark them done without a request
+                if not scraper.needs_detail(sid):
+                    db.apply_detail(conn, source, sid, Detail("open"), now)
+            pending = [sid for sid in pending if scraper.needs_detail(sid)]
             log.info("[%s] fetching %d details…", source, len(pending))
             for chunk in _chunks(pending, scraper.detail_batch):
                 results = scraper.fetch_details(chunk)

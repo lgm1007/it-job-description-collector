@@ -29,6 +29,7 @@ class FakeScraper(Scraper):
     details: dict[str, Detail] = {}
     asked: list[str] = []
     error: Exception | None = None
+    no_detail: set[str] = set()
 
     def prepare(self):
         pass
@@ -41,6 +42,9 @@ class FakeScraper(Scraper):
             raise FakeScraper.error
         yield [make_posting(sid) for sid in FakeScraper.listing]
         self.listing_complete = FakeScraper.complete
+
+    def needs_detail(self, source_id):
+        return source_id not in FakeScraper.no_detail
 
     def fetch_details(self, source_ids):
         FakeScraper.asked.extend(source_ids)
@@ -59,7 +63,7 @@ class Clock:
 @pytest.fixture
 def fake(monkeypatch):
     FakeScraper.listing, FakeScraper.complete, FakeScraper.details = [], True, {}
-    FakeScraper.asked, FakeScraper.error = [], None
+    FakeScraper.asked, FakeScraper.error, FakeScraper.no_detail = [], None, set()
     monkeypatch.setitem(pipeline.SCRAPERS, "wanted", FakeScraper)
     monkeypatch.setattr(pipeline, "now_kst", Clock())
     monkeypatch.setattr(pipeline, "today_kst", lambda: "2026-11-03")
@@ -82,6 +86,14 @@ def test_new_postings_get_details(conn, settings, fake):
     summary = run(conn, settings, ["1", "2"])
     assert summary["status"] == "ok" and summary["new"] == 2 and summary["details"] == 2
     assert sorted(fake.asked) == ["1", "2"]
+
+
+def test_postings_with_nothing_more_to_fetch_are_not_requested(conn, settings, fake):
+    summary = run(conn, settings, ["1", "2"], no_detail={"2"})
+    assert fake.asked == ["1"] and summary["details"] == 1
+    assert conn.execute("SELECT detail_fetched_at FROM jobs WHERE source_id = '2'").fetchone()[0] is not None
+    run(conn, settings, ["1", "2"], no_detail=set())
+    assert fake.asked == []  # done, not left pending for the next run
 
 
 def test_posting_missing_from_listing_is_checked_and_deleted(conn, settings, fake):
