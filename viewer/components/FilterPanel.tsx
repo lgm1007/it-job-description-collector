@@ -3,8 +3,8 @@
 import { useRef, useState } from "react";
 
 import type { Filters } from "@/lib/filters";
-import { REGION_ORDER, SOURCES, toggled } from "@/lib/format";
-import type { Meta } from "@/lib/types";
+import { REGION_ORDER, SOURCES, STEPS, toggled } from "@/lib/format";
+import type { Facet, Meta } from "@/lib/types";
 
 const YEARS: [string, string][] = [
   ["", "전체"],
@@ -19,6 +19,12 @@ const DAYS: [string, string][] = [
   ["14", "14d"],
 ];
 const MAX_DISTRICTS = 40;
+const MAX_STACKS = 24; // the rest behind "더 보기"
+const STEP_STATES: ["" | "has" | "lacks", string][] = [
+  ["", "전체"],
+  ["has", "있음"],
+  ["lacks", "없음"],
+];
 const DEBOUNCE_MS = 350;
 
 function Token({ label, count, pressed, onClick }: { label: string; count?: number; pressed: boolean; onClick: () => void }) {
@@ -82,6 +88,22 @@ export default function FilterPanel(props: {
   onLogout: () => void;
 }) {
   const { filters, meta, open, email, onChange, onReset, onClose, onLogout } = props;
+  const [allStacks, setAllStacks] = useState(false);
+
+  const stacks: Facet[] = meta?.stacks ?? [];
+  // Chosen stacks stay visible when folded away, or when no posting uses them any more.
+  const shownStacks = allStacks
+    ? stacks
+    : [...stacks.slice(0, MAX_STACKS), ...stacks.slice(MAX_STACKS).filter((s) => filters.stack.includes(s.name))];
+  const goneStacks = filters.stack.filter((name) => !stacks.some((s) => s.name === name));
+
+  const stepState = (key: string) => (filters.steps.includes(key) ? "has" : filters.noSteps.includes(key) ? "lacks" : "");
+  const setStep = (key: string, state: string) => {
+    const keys = (list: string[], want: string) =>
+      STEPS.map((s) => s.key).filter((k) => (k === key ? state === want : list.includes(k)));
+    onChange({ steps: keys(filters.steps, "has"), noSteps: keys(filters.noSteps, "lacks") });
+  };
+  const known = meta?.process?.known ?? 0;
 
   const rank = (name: string) => {
     const i = REGION_ORDER.indexOf(name);
@@ -120,6 +142,35 @@ export default function FilterPanel(props: {
       </section>
 
       <section>
+        <h3>
+          기술스택{" "}
+          <button type="button" className="link" onClick={() => onChange({ stack: [] })}>
+            전체
+          </button>
+        </h3>
+        <div className="tokens">
+          {shownStacks.map((s) => (
+            <Token
+              key={s.name}
+              label={s.name}
+              count={s.count}
+              pressed={filters.stack.includes(s.name)}
+              onClick={() => onChange({ stack: toggled(filters.stack, s.name) })}
+            />
+          ))}
+          {goneStacks.map((name) => (
+            <Token key={name} label={name} count={0} pressed onClick={() => onChange({ stack: toggled(filters.stack, name) })} />
+          ))}
+          {stacks.length > MAX_STACKS && (
+            <button type="button" className="link more" onClick={() => setAllStacks(!allStacks)}>
+              {allStacks ? "접기" : `+${stacks.length - MAX_STACKS} 더 보기`}
+            </button>
+          )}
+        </div>
+        <p className="hint">고른 것 중 하나라도 쓰는 공고. 기술스택 항목과 제목·본문에서 찾습니다.</p>
+      </section>
+
+      <section>
         <h3>내 경력</h3>
         <div className="years">
           {YEARS.map(([value, label]) => (
@@ -127,6 +178,42 @@ export default function FilterPanel(props: {
           ))}
         </div>
         <p className="hint">이 연차로 지원 가능한 공고만. 경력 조건이 없는 공고는 포함합니다.</p>
+      </section>
+
+      <section>
+        <h3>
+          채용 절차{" "}
+          <button type="button" className="link" onClick={() => onChange({ steps: [], noSteps: [] })}>
+            전체
+          </button>
+        </h3>
+        <div className="steps">
+          {STEPS.map((step) => {
+            const has = meta?.process?.steps[step.key] ?? 0;
+            return (
+              <div key={step.key} className="step" role="group" aria-label={step.label}>
+                <span className="name">{step.label}</span>
+                <div className="seg">
+                  {STEP_STATES.map(([state, label]) => (
+                    <button
+                      key={state}
+                      type="button"
+                      aria-pressed={stepState(step.key) === state}
+                      title={state === "has" ? `${has.toLocaleString()}건` : state === "lacks" ? `${(known - has).toLocaleString()}건` : undefined}
+                      onClick={() => setStep(step.key, state)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <p className="hint">
+          절차가 적힌 공고 {known.toLocaleString()}건 중에서 찾고, &apos;추가될 수 있음&apos;도 있음으로 봅니다. 사람인·잡코리아는 본문이 이미지라
+          대부분 알 수 없습니다.
+        </p>
       </section>
 
       <section>

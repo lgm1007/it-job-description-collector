@@ -124,6 +124,11 @@ kbd {
 
 .years { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; }
 .years .tok { padding: 2px 0; text-align: center; }
+.tokens .more { padding: 1px 4px; }
+
+.steps { display: grid; gap: 4px; }
+.step { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.step .name { color: var(--muted); }
 
 .sources { display: grid; gap: 3px; }
 .sources .flag { margin: 0; display: grid; grid-template-columns: 3ch 9ch 1fr auto; gap: 6px; width: 100%; }

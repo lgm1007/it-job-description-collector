@@ -22,6 +22,16 @@ def test_row_holds_what_the_viewer_needs(conn):
     assert set(r) == set(sync.COLUMNS)
 
 
+def test_unknown_hiring_process_stays_apart_from_none(conn):
+    db.upsert_listing(conn, make_posting("unknown"), NOW, TODAY)
+    db.upsert_listing(conn, make_posting("none", description="[채용절차]\n서류전형 → 최종합격"), NOW, TODAY)
+    db.upsert_listing(conn, make_posting("steps", description="[채용절차]\n서류 → 과제 → 1차 면접 → 2차 면접"), NOW, TODAY)
+    assert row(conn, "unknown")["process"] is None
+    assert row(conn, "none")["process"] == []
+    assert row(conn, "steps")["process"] == ["assignment", "interview1", "interview2"]
+    assert row(conn, "steps")["stacks"] == ["Kotlin", "Spring"]
+
+
 def test_listed_date_falls_back_to_first_seen_except_for_a_first_run_backlog(conn):
     db.upsert_listing(conn, make_posting("later", posted_at=None), NOW, TODAY)
     db.upsert_listing(conn, make_posting("backlog", posted_at=None), NOW, TODAY, seeding=True)

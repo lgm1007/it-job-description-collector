@@ -19,6 +19,33 @@ def test_new_posting_is_stored_with_derived_fields(conn):
     assert "kotlin" in job["title_text"] and "kotlin" in job["search_text"]
 
 
+def test_stacks_and_hiring_steps_are_derived(conn):
+    db.upsert_listing(conn, make_posting("1", skills=["spring boot", "유지보수"], title="Kotlin 서버 개발자"), NOW, TODAY)
+    assert row(conn)["stacks"] == "|Spring|Kotlin|" and row(conn)["process"] is None  # no description yet
+    db.apply_detail(conn, "wanted", "1", Detail("open", {
+        "description": "[자격요건]\nAWS 경험\n\n[채용 전형]\n서류 ＞ 코딩테스트 ＞ 1차 면접 ＞ 최종 합격",
+    }), NOW)
+    assert row(conn)["stacks"] == "|Spring|Kotlin|AWS|"
+    assert row(conn)["process"] == '["coding", "interview1"]'
+    db.upsert_listing(conn, make_posting("2", skills=[], title="서버 개발자", description="[채용절차]\n서류전형 → 최종합격"),
+                      NOW, TODAY)
+    assert row(conn, "2")["stacks"] == "" and row(conn, "2")["process"] == "[]"  # known, and none of the steps
+
+
+def test_older_databases_get_stacks_and_steps_computed_once(tmp_path):
+    path = tmp_path / "jobs.sqlite3"
+    conn = db.connect(path)
+    db.upsert_listing(conn, make_posting("1", description="[채용절차]\n서류 ＞ 사전과제 ＞ 면접"), NOW, TODAY)
+    conn.execute("ALTER TABLE jobs DROP COLUMN stacks")
+    conn.execute("ALTER TABLE jobs DROP COLUMN process")
+    conn.commit()
+    conn.close()
+    conn = db.connect(path)
+    assert row(conn)["stacks"] == "|Kotlin|Spring|"
+    assert row(conn)["process"] == '["assignment", "interview1"]'
+    conn.close()
+
+
 def test_closed_and_expired_postings_are_not_stored(conn):
     assert db.upsert_listing(conn, make_posting("open"), NOW, TODAY) == "new"
     assert db.upsert_listing(conn, make_posting("closed", is_open=False), NOW, TODAY) == "skipped"

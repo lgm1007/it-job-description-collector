@@ -14,6 +14,40 @@ export const REGION_ORDER = [
   "강원", "충북", "충남", "전북", "전남", "경북", "경남", "제주",
 ];
 
+/** Hiring steps as public.jobs.process stores them, in display order. */
+export const STEPS = [
+  { key: "coding", label: "코딩테스트" },
+  { key: "assignment", label: "사전과제" },
+  { key: "interview1", label: "1차면접" },
+  { key: "interview2", label: "2차면접" },
+  { key: "reference", label: "레퍼런스체크" },
+];
+
+export const stepLabel = (key: string) => STEPS.find((s) => s.key === key)?.label ?? key;
+
+/** '1차면접 · 2차면접 (없음: 코딩테스트, 사전과제, 레퍼런스체크)'; null means the posting doesn't say. */
+export function processText(process: string[] | null): string {
+  if (process === null) return "알 수 없음 (공고에 채용 절차가 적혀 있지 않습니다)";
+  const has = STEPS.filter((s) => process.includes(s.key)).map((s) => s.label);
+  const lacks = STEPS.filter((s) => !process.includes(s.key)).map((s) => s.label);
+  if (!has.length) return `${lacks.join(", ")} 없음`;
+  return lacks.length ? `${has.join(" · ")} (없음: ${lacks.join(", ")})` : has.join(" · ");
+}
+
+const looseKey = (s: string) => s.toLowerCase().replace(/[^0-9a-z가-힣+#]/g, "");
+
+// 'springboot' is Spring and 'postgres' PostgreSQL, but 'c++' is not C.
+const sameStack = (a: string, b: string) => {
+  const [short, long] = a.length <= b.length ? [a, b] : [b, a];
+  return short === long || (short.length >= 2 && long.startsWith(short) && /^[a-z]+$/.test(long.slice(short.length)));
+};
+
+/** The site's own tags that aren't one of the stacks, such as 유지보수 or SI개발. 'Spring Boot' counts as Spring. */
+export function otherTags(skills: string[], stacks: string[]): string[] {
+  const keys = stacks.map(looseKey);
+  return skills.filter((skill) => !keys.some((key) => sameStack(looseKey(skill), key)));
+}
+
 export const sourceLabel = (key: string) => SOURCES.find((s) => s.key === key)?.label ?? key;
 
 const pad = (n: number) => String(n).padStart(2, "0");

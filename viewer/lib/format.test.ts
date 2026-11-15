@@ -1,7 +1,16 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { careerShort, dueLabel, safeHref, toggled } from "./format.ts";
+import { careerShort, dueLabel, otherTags, processText, safeHref, toggled } from "./format.ts";
+
+test("site tags already shown as stacks are left out", () => {
+  assert.deepEqual(otherTags(["Spring Boot", "kotlin", "ReactJS", "postgres", "유지보수", "SI개발"], ["Spring", "Kotlin", "React", "PostgreSQL"]), [
+    "유지보수",
+    "SI개발",
+  ]);
+  assert.deepEqual(otherTags(["C++", "C#"], ["C"]), ["C++", "C#"]);
+  assert.deepEqual(otherTags([], ["Java"]), []);
+});
 
 test("career ranges", () => {
   assert.equal(careerShort(null, null), "—");
@@ -31,4 +40,14 @@ test("only web addresses become links", () => {
 test("toggling adds and removes", () => {
   assert.deepEqual(toggled(["a"], "b"), ["a", "b"]);
   assert.deepEqual(toggled(["a", "b"], "a"), ["b"]);
+});
+
+test("hiring process: unknown, none, and some steps", () => {
+  assert.match(processText(null), /^알 수 없음/);
+  assert.equal(processText([]), "코딩테스트, 사전과제, 1차면접, 2차면접, 레퍼런스체크 없음");
+  assert.equal(processText(["interview2", "coding", "interview1"]), "코딩테스트 · 1차면접 · 2차면접 (없음: 사전과제, 레퍼런스체크)");
+  assert.equal(
+    processText(["coding", "assignment", "interview1", "interview2", "reference"]),
+    "코딩테스트 · 사전과제 · 1차면접 · 2차면접 · 레퍼런스체크",
+  );
 });

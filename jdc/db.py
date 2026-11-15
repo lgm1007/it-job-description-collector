@@ -6,8 +6,10 @@ import sqlite3
 from collections import Counter
 from pathlib import Path
 
+from .hiring import hiring_steps
 from .models import Detail, Posting
 from .normalize import dedupe_key, fold, normalize_location
+from .stacks import find_stacks
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS jobs (
@@ -25,6 +27,8 @@ CREATE TABLE IF NOT EXISTS jobs (
     career_max INTEGER,
     career_text TEXT,
     skills TEXT NOT NULL DEFAULT '[]',
+    stacks TEXT NOT NULL DEFAULT '',       -- '|Java|Spring|': skills, title and description, one spelling each
+    process TEXT,                          -- '["coding","interview1"]'; NULL = the posting doesn't say
     categories TEXT NOT NULL DEFAULT '[]',
     employment_type TEXT,
     deadline TEXT,                         -- YYYY-MM-DD inclusive, NULL = 상시
@@ -70,7 +74,8 @@ _JSON_COLUMNS = ("locations", "skills", "categories", "extra")
 _KEEP_IF_EMPTY = ("description", "posted_at", "employment_type", "career_text", "skills", "categories")
 # Closed postings are deleted while scraping; this also hides ones whose deadline passed since.
 VISIBLE = "(deadline IS NULL OR deadline >= :today)"
-_ADDED_COLUMNS = {"seeded": "INTEGER NOT NULL DEFAULT 0"}
+_ADDED_COLUMNS = {"seeded": "INTEGER NOT NULL DEFAULT 0", "stacks": "TEXT NOT NULL DEFAULT ''", "process": "TEXT"}
+_DERIVED_COLUMNS = ("stacks", "process")  # added later: existing rows get them computed once
 
 
 def connect(path: Path | str) -> sqlite3.Connection:
@@ -88,6 +93,8 @@ def connect(path: Path | str) -> sqlite3.Connection:
     if "status" in existing:  # databases from before closed postings were deleted
         conn.execute("DELETE FROM jobs WHERE status != 'open'")
         conn.commit()
+    if any(column not in existing for column in _DERIVED_COLUMNS) and "title" in existing:
+        rederive(conn)
     return conn
 
 
@@ -148,9 +155,13 @@ def _derived(rec: dict) -> dict:
     skills = " ".join(rec.get("skills") or [])
     categories = " ".join(rec.get("categories") or [])
     head = " ".join([rec["title"], rec["company"], skills, categories])
+    stacks = find_stacks(rec.get("skills") or [], rec["title"], rec.get("description"))
+    process = hiring_steps(rec.get("description"))
     return {
         "regions": f"|{'|'.join(regions)}|" if regions else "",
         "districts": f"|{'|'.join(districts)}|" if districts else "",
+        "stacks": f"|{'|'.join(stacks)}|" if stacks else "",
+        "process": None if process is None else json.dumps(process),
         "location_text": location_text,
         "title_text": fold(head),
         "search_text": fold(" ".join([head, rec.get("employment_type") or "", rec.get("description") or ""])),
@@ -219,7 +230,7 @@ def apply_detail(conn: sqlite3.Connection, source: str, source_id: str, detail: 
 
 
 def rederive(conn: sqlite3.Connection) -> int:
-    """Recompute regions, search text and dedupe keys after normalization rules change."""
+    """Recompute regions, stacks, hiring steps, search text and dedupe keys after the rules change."""
     rows = conn.execute("SELECT * FROM jobs").fetchall()
     for row in rows:
         rec = _decode(row)

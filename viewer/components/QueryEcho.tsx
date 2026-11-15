@@ -3,6 +3,7 @@
 import { Fragment } from "react";
 
 import type { Filters } from "@/lib/filters";
+import { stepLabel } from "@/lib/format";
 
 /** The current conditions, written out like a command. */
 export default function QueryEcho({ filters: f }: { filters: Filters }) {
@@ -10,7 +11,10 @@ export default function QueryEcho({ filters: f }: { filters: Filters }) {
   if (f.q) parts.push(["q", `"${f.q}"`]);
   if (f.exclude) parts.push(["not", `"${f.exclude}"`]);
   if (f.titleOnly) parts.push(["in", "title"]);
+  if (f.stack.length) parts.push(["stack", f.stack.join(",")]);
   if (f.years !== "") parts.push(["exp", f.years === "0" ? "신입" : `${f.years}y`]);
+  if (f.steps.length || f.noSteps.length)
+    parts.push(["step", [...f.steps.map(stepLabel), ...f.noSteps.map((s) => `!${stepLabel(s)}`)].join(",")]);
   if (f.region.length) parts.push(["region", f.region.join(",")]);
   if (f.district.length) parts.push(["district", f.district.map((d) => d.split(" ")[1]).join(",")]);
   if (f.source.length) parts.push(["site", f.source.join(",")]);

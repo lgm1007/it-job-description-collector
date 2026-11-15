@@ -80,6 +80,37 @@ def test_region_district_career_source_filters(pg, load):
     assert call(pg, regions=[], districts=[], sources=[])["total"] == 4  # empty means no filter
 
 
+def test_stack_filter_matches_any_chosen_stack(pg, load):
+    load(
+        make_posting("kotlin", skills=["kotlin", "Spring Boot"]),
+        make_posting("react", skills=[], title="프론트엔드", description="[자격요건]\nReact, TypeScript 경험"),
+        make_posting("none", skills=["유지보수"], title="운영 담당"),
+    )
+    assert sorted(ids(call(pg, stacks=["Spring"]))) == ["kotlin"]
+    assert sorted(ids(call(pg, stacks=["Kotlin", "React"]))) == ["kotlin", "react"]
+    assert call(pg, stacks=["Rust"])["total"] == 0
+    assert call(pg, stacks=[])["total"] == 3
+    item = next(i for i in call(pg)["items"] if i["url"].endswith("/react"))
+    assert item["stacks"] == ["React", "TypeScript"] and item["skills"] == []
+
+
+def test_hiring_step_filters_leave_out_unknown_processes(pg, load):
+    load(
+        make_posting("coding", description="[채용절차]\n서류 ＞ 코딩테스트 ＞ 1차 면접 ＞ 2차 면접"),
+        make_posting("plain", description="[채용절차]\n서류 ＞ 1차 면접 ＞ 최종합격"),
+        make_posting("none", description="[채용절차]\n서류전형 ＞ 최종합격"),
+        make_posting("unknown"),
+    )
+    assert ids(call(pg, steps=["coding"])) == ["coding"]
+    assert sorted(ids(call(pg, steps=["interview1"]))) == ["coding", "plain"]
+    assert ids(call(pg, steps=["coding", "interview2"])) == ["coding"]  # every chosen step
+    assert sorted(ids(call(pg, no_steps=["coding"]))) == ["none", "plain"]  # not 'unknown'
+    assert ids(call(pg, steps=["interview1"], no_steps=["coding"])) == ["plain"]
+    assert call(pg, steps=[], no_steps=[])["total"] == 4
+    m = meta(pg)
+    assert m["process"] == {"known": 3, "steps": {"coding": 1, "interview1": 2, "interview2": 1}}
+
+
 def test_days_filter_and_sorting(pg, load):
     load(
         make_posting("old", posted_at="2026-10-01", deadline="2026-11-05"),
@@ -152,12 +183,14 @@ def test_meta_counts(pg, load):
     assert m["sources"] == {"wanted": 1, "jumpit": 1}
     assert {r["name"] for r in m["regions"]} == {"서울", "경기"}
     assert m["districts"]["경기"] == [{"name": "경기 성남시", "count": 1}]
+    assert m["stacks"] == [{"name": "Kotlin", "count": 2}, {"name": "Spring", "count": 2}]
     assert m["synced_at"] is not None
 
 
 def test_meta_on_an_empty_database(pg):
     m = meta(pg)
     assert m["total"] == 0 and m["sources"] == {} and m["regions"] == [] and m["districts"] == {}
+    assert m["stacks"] == [] and m["process"] == {"known": 0, "steps": {}}
     assert m["runs"] == [] and m["synced_at"] is None
 
 

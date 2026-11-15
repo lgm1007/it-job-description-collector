@@ -13,6 +13,7 @@ export type Job = {
   career_min: number | null;
   career_max: number | null;
   skills: string[];
+  stacks: string[];
   categories: string[];
   deadline: string | null;
   days_left: number | null;
@@ -31,6 +32,9 @@ export type JobDetail = {
   location_text: string;
   career: string;
   skills: string[];
+  stacks: string[];
+  /** Hiring steps the posting describes (see STEPS); null when it doesn't describe its process. */
+  process: string[] | null;
   categories: string[];
   employment_type: string | null;
   deadline: string | null;
@@ -58,6 +62,9 @@ export type Meta = {
   sources: Record<string, number>;
   regions: Facet[];
   districts: Record<string, Facet[]>;
+  stacks: Facet[];
+  /** known: postings that describe their process; steps: how many of those include each step. */
+  process: { known: number; steps: Record<string, number> };
   runs: Run[];
   synced_at: string | null;
 };

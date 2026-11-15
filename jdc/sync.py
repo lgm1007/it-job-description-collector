@@ -25,8 +25,8 @@ log = logging.getLogger(__name__)
 # Columns of public.jobs the collector writes, in upload order. content_hash covers all the others.
 COLUMNS = (
     "source", "source_id", "url", "title", "company", "locations", "location_text", "regions", "districts",
-    "career_min", "career_max", "career", "skills", "categories", "employment_type", "deadline", "posted_at",
-    "listed_at", "description", "title_text", "search_text", "dedupe_key", "content_hash",
+    "career_min", "career_max", "career", "skills", "stacks", "process", "categories", "employment_type",
+    "deadline", "posted_at", "listed_at", "description", "title_text", "search_text", "dedupe_key", "content_hash",
 )
 # Below this many stored postings, a large share going away is not alarming.
 _GUARD_MIN_STORED = 50
@@ -81,6 +81,8 @@ def _row(rec: sqlite3.Row) -> dict:
         "career_max": rec["career_max"],
         "career": _clean(career_label(rec["career_min"], rec["career_max"], rec["career_text"])),
         "skills": _clean_list(json.loads(rec["skills"] or "[]")),
+        "stacks": _split_marked(rec["stacks"]),
+        "process": None if rec["process"] is None else json.loads(rec["process"]),  # None: the posting doesn't say
         "categories": _clean_list(json.loads(rec["categories"] or "[]")),
         "employment_type": _clean(rec["employment_type"]),
         "deadline": _date(rec["deadline"]),

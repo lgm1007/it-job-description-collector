@@ -19,6 +19,9 @@ test("conditions survive the round trip through the URL", () => {
     district: ["서울 강남구"],
     source: ["wanted", "jumpit"],
     days: "7",
+    stack: ["C++", "Node.js", "C#"],
+    steps: ["interview1"],
+    noSteps: ["coding", "assignment"],
     sort: "deadline" as const,
     dedupe: false,
     page: 3,
@@ -32,6 +35,8 @@ test("bad URL values fall back to defaults", () => {
   assert.equal(f.sort, "latest");
   assert.deepEqual(f.region, ["서울"]);
   assert.equal(parseFilters("?page=-2").page, 1);
+  // A step can't be both required and ruled out.
+  assert.deepEqual(parseFilters("?step=coding&no_step=coding,assignment").noSteps, ["assignment"]);
 });
 
 test("empty conditions reach the database as null, and zero years stays zero", () => {
@@ -40,6 +45,9 @@ test("empty conditions reach the database as null, and zero years stays zero", (
   assert.equal(args.p_regions, null);
   assert.equal(args.p_years, null);
   assert.equal(args.p_days, null);
+  assert.equal(args.p_stacks, null);
+  assert.equal(args.p_steps, null);
+  assert.equal(args.p_no_steps, null);
   assert.equal(args.p_size, 50);
   assert.equal(searchArgs({ ...NO_FILTERS, years: "0" }, 50).p_years, 0);
 });

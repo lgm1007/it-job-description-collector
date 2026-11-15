@@ -70,7 +70,7 @@ def main(argv: list[str] | None = None) -> int:
     grant.add_argument("email")
 
     sub.add_parser("stats", help="저장된 공고 현황")
-    sub.add_parser("reindex", help="지역·검색어·중복 판단을 저장된 데이터로 다시 계산합니다 (정규화 규칙을 바꾼 뒤)")
+    sub.add_parser("reindex", help="지역·기술스택·채용 절차·검색어·중복 판단을 저장된 데이터로 다시 계산합니다 (규칙을 바꾼 뒤)")
 
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")

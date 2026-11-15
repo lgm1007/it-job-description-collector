@@ -31,7 +31,7 @@ export async function fetchMeta(): Promise<Meta> {
 export async function fetchJob(id: number): Promise<JobDetail> {
   const { data, error } = await client()
     .from("jobs")
-    .select("id, url, company, locations, location_text, career, skills, categories, employment_type, deadline, posted_at, description")
+    .select("id, url, company, locations, location_text, career, skills, stacks, process, categories, employment_type, deadline, posted_at, description")
     .eq("id", id)
     .single();
   if (error) throw new Error(error.message);

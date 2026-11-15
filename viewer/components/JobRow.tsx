@@ -2,7 +2,7 @@
 
 import { type ReactNode, useEffect, useState } from "react";
 
-import { careerShort, dueLabel, safeHref, sourceLabel } from "@/lib/format";
+import { careerShort, dueLabel, otherTags, processText, safeHref, sourceLabel } from "@/lib/format";
 import { fetchJob } from "@/lib/supabase";
 import type { Job, JobDetail } from "@/lib/types";
 
@@ -40,8 +40,10 @@ function Detail({ job }: { job: Job }) {
     ["type", data.employment_type],
     ["posted", data.posted_at],
     ["deadline", data.deadline ? `${data.deadline} (${dueLabel(job.days_left, job.deadline).text})` : "상시채용"],
-    ["stack", data.skills.join(", ")],
+    ["stack", data.stacks.join(", ")],
+    ["tags", otherTags(data.skills, data.stacks).join(", ")],
     ["role", data.categories.join(", ")],
+    ["process", processText(data.process)],
   ];
   return (
     <>
@@ -62,7 +64,7 @@ function Detail({ job }: { job: Job }) {
 
 export default function JobRow({ job, selected, open, onClick }: { job: Job; selected: boolean; open: boolean; onClick: () => void }) {
   const due = dueLabel(job.days_left, job.deadline);
-  const stack = (job.skills.length ? job.skills : job.categories).slice(0, 6);
+  const stack = (job.stacks?.length ? job.stacks : job.skills.length ? job.skills : job.categories).slice(0, 6);
   // Stays mounted once opened, so closing and reopening doesn't fetch again.
   const [everOpened, setEverOpened] = useState(open);
   if (open && !everOpened) setEverOpened(true);
