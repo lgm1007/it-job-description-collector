@@ -2,7 +2,7 @@
 
 원티드 · 리멤버 · 잡플래닛 · 점핏 · 사람인 · 잡코리아의 개발 직군 채용공고를
 [browser-harness](https://github.com/browser-use/browser-harness)로 수집해서,
-키워드 · 지역 · 경력 같은 조건으로 한 번에 찾는 개인용 서비스입니다.
+키워드 · 기술스택 · 채용 절차 · 지역 · 경력 같은 조건으로 한 번에 찾는 개인용 서비스입니다.
 
 수집과 조회가 나뉘어 있습니다. **수집은 맥북에서** 필요할 때 직접 실행하고, 끝나면 결과가 Supabase로 올라갑니다.
 **조회는 웹앱에서** 합니다. 웹앱은 Supabase만 읽으니 맥북이 꺼져 있어도 폰에서 볼 수 있습니다.
@@ -14,11 +14,11 @@
 
 | PC · 검색 조건과 공고 목록 | PC · 키워드 검색과 공고 상세 |
 | :---: | :---: |
-| <img src="docs/screenshots/desktop.png" width="400" alt="PC 화면: 왼쪽 검색 조건과 오른쪽 공고 목록"> | <img src="docs/screenshots/desktop-detail.png" width="400" alt="PC 화면: kotlin 키워드에 기술스택(Kotlin, Spring)과 채용 절차(코딩테스트·2차면접 있음, 사전과제 없음)로 좁힌 공고의 상세 정보와 본문"> |
+| <img src="docs/screenshots/desktop.png" width="400" alt="PC 화면: 왼쪽 검색 조건(키워드·제외·기술스택·경력)과 오른쪽 공고 목록"> | <img src="docs/screenshots/desktop-detail.png" width="400" alt="PC 화면: kotlin 키워드에 기술스택(Kotlin, Spring)과 채용 절차(코딩테스트·2차면접 있음, 사전과제 없음)로 좁힌 공고의 상세 정보와 본문"> |
 
 | 폰 · 공고 목록 | 폰 · 기술스택 · 채용 절차 · 지역 선택 | 폰 · 공고 상세 |
 | :---: | :---: | :---: |
-| <img src="docs/screenshots/mobile.png" width="200" alt="폰 화면: 공고 목록"> | <img src="docs/screenshots/mobile-filters.png" width="200" alt="폰 화면: 기술스택 선택, 채용 절차 단계별 있음·없음, 서울을 고르면 구 단위로 좁히는 지역 검색 조건"> | <img src="docs/screenshots/mobile-detail.png" width="200" alt="폰 화면: 공고 상세 정보와 본문"> |
+| <img src="docs/screenshots/mobile.png" width="200" alt="폰 화면: 공고 목록"> | <img src="docs/screenshots/mobile-filters.png" width="200" alt="폰 화면: 기술스택 선택, 채용 절차 단계별 있음·없음, 서울을 고르면 구 단위로 좁히는 지역 검색 조건"> | <img src="docs/screenshots/mobile-detail.png" width="200" alt="폰 화면: 기술스택과 채용 절차가 들어간 공고 상세 정보와 본문"> |
 
 <sub>로컬 Supabase에 예시 데이터를 넣고 촬영했습니다. 캡처의 회사와 공고는 화면을 보여 주려고 만든 가짜 데이터이고, 실제로 수집한 공고는 저장소에 올리지 않습니다.</sub>
 
@@ -120,6 +120,7 @@ caffeinate -i .venv/bin/python -m jdc scrape
 
 1. 화면 없는(headless) 전용 Chrome을 띄웁니다. 평소 쓰는 Chrome과는 따로 돌아갑니다.
 2. 사이트 6곳을 차례로 돌며 목록을 끝까지 읽습니다. 처음 보는 공고는 새로 저장하고, 이미 있는 공고는 정보를 고칩니다.
+   저장할 때마다 기술스택과 채용 절차를 다시 계산합니다([기술스택과 채용 절차를 뽑는 방법](#기술스택과-채용-절차를-뽑는-방법)).
 3. 새 공고의 상세 정보(본문, 등록일, 정확한 근무지)를 받습니다. 원티드·잡플래닛·점핏이 해당되고,
    리멤버는 목록에 본문이 들어 있고 사람인·잡코리아는 본문이 대부분 이미지라 받지 않습니다.
    잡플래닛 목록의 대부분(약 94%)은 잡코리아 공고를 다시 올린 것이라 잡플래닛에 본문이 없으므로, 이런 공고도 받지 않습니다.
@@ -259,7 +260,10 @@ jdc scrape
   잡플래닛이 잡코리아 공고를 다시 올린 것은 회사명 표기가 달라도(`SOOP` / `㈜숲(SOOP CO., LTD.)`) 공고 번호로 묶습니다.
 - 검색 조건이 URL에 남아서 북마크해 두고 다음에도 같은 조건으로 볼 수 있습니다.
 - **수집 현황**: 사이트별 최근 수집 결과와 오류, 마지막 업로드 시각을 볼 수 있습니다.
-- 단축키: `/` 검색, `j`·`k` 이동, `⏎` 원문 열기, `␣` 상세 펼치기, `[`·`]` 페이지, `s` 정렬, `m` 합치기, `t` 테마, `?` 도움말
+- 공고 목록 줄과 상세의 `stack`에는 사이트 표기 대신 맞춰 둔 기술스택 이름을 보여줍니다.
+  기술스택을 찾지 못한 공고는 목록 줄에 사이트의 기술스택 항목이나 직무를 대신 보여줍니다.
+- 단축키: `/` 검색, `j`·`k`(`↓`·`↑`) 이동, `⏎`·`o` 원문 열기, `␣`·`→` 상세 펼치기/접기, `[`·`]` 페이지,
+  `s` 정렬, `m` 합치기, `t` 테마, `esc` 입력창 빠져나오기, `?` 도움말
 
 ## 명령어
 
@@ -344,9 +348,11 @@ supabase/
   migrations/        테이블, RLS, 검색 함수 (search_jobs, jobs_meta)
   seed.sql           로컬 개발용 테스트 계정 (실제 프로젝트에는 올라가지 않습니다)
 viewer/              웹앱 (Next.js 정적 내보내기)
-  components/        화면
-  lib/               Supabase 호출, 검색 조건, 표시 형식
-tests/               파서·DB·파이프라인·업로드·검색 함수 테스트
+  app/               페이지, 전역 스타일, 아이콘
+  components/        화면 (로그인, 검색 조건, 공고 목록·상세, 도움말·수집 현황)
+  lib/               Supabase 호출, 검색 조건, 표시 형식, 테마
+  public/            폰 설치용 manifest와 아이콘, robots.txt
+tests/               파서·DB·파이프라인·업로드·검색 함수·기술스택·채용 절차 테스트
 ```
 
 ## 개발
