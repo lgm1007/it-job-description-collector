@@ -5,6 +5,8 @@ import { type FormEvent, useState } from "react";
 
 import { PAUSED_HINT, supabase } from "@/lib/supabase";
 
+import Copyright from "./Copyright";
+
 function describe(error: AuthError): string {
   if (error.code === "invalid_credentials") return "이메일 또는 비밀번호가 맞지 않습니다.";
   if (isAuthRetryableFetchError(error)) return `서버에 연결하지 못했습니다. ${PAUSED_HINT}`;
@@ -65,6 +67,9 @@ export default function LoginForm() {
           </p>
         )}
         <p className="hint">개인용 서비스입니다. 가입은 받지 않습니다.</p>
+        <p className="hint copyright">
+          <Copyright />
+        </p>
       </form>
     </main>
   );

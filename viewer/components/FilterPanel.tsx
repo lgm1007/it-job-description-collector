@@ -6,6 +6,8 @@ import type { Filters } from "@/lib/filters";
 import { REGION_ORDER, SOURCES, STEPS, toggled } from "@/lib/format";
 import type { Facet, Meta } from "@/lib/types";
 
+import Copyright from "./Copyright";
+
 const YEARS: [string, string][] = [
   ["", "전체"],
   ["0", "신입"],
@@ -294,6 +296,10 @@ export default function FilterPanel(props: {
         로그아웃
       </button>
       {email && <p className="hint">{email}</p>}
+      {/* On a phone the status bar has no room for it. */}
+      <p className="hint only-mobile copyright">
+        <Copyright />
+      </p>
     </aside>
   );
 }

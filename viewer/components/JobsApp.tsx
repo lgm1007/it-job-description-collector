@@ -8,6 +8,7 @@ import { fetchMeta, PAUSED_HINT, searchJobs, supabase } from "@/lib/supabase";
 import { toggleTheme } from "@/lib/theme";
 import type { Job, Meta } from "@/lib/types";
 
+import Copyright from "./Copyright";
 import { HelpDialog, RunsDialog } from "./Dialogs";
 import FilterPanel from "./FilterPanel";
 import JobRow from "./JobRow";
@@ -296,6 +297,7 @@ export default function JobsApp({ email }: { email?: string }) {
           <kbd>/</kbd> 검색 <kbd>j</kbd>
           <kbd>k</kbd> 이동 <kbd>⏎</kbd> 열기 <kbd>␣</kbd> 상세
         </span>
+        <Copyright className="sb-btn sb-link only-desktop" />
         <button type="button" className="sb-btn" onClick={() => runsDialog.current?.showModal()}>
           수집 현황
         </button>
